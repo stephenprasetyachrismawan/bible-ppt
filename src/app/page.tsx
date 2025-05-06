@@ -8,6 +8,15 @@ type VerseMap = Record<string, VerseContent>;
 type ChapterMap = Record<string, VerseMap>;
 type BibleData = Record<string, ChapterMap>;
 
+// Define types for verse objects
+interface Verse {
+  id: string;
+  number: number;
+  text?: string;
+  type?: 'verse' | 'title';
+  urutan?: number;
+}
+
 // Import Firestore utilities
 import getAllDocuments from '@/firebase/firestore/getAllData';
 import getSubCollection from '@/firebase/firestore/getSubCollection';
@@ -16,18 +25,38 @@ import documentExists from '@/firebase/firestore/documentExists';
 import testFirestoreConnection from '@/firebase/firestore/testConnection';
 import addData from '@/firebase/firestore/addData';
 
-
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [bibleVersions, setBibleVersions] = useState<Array<{id: string, name: string, shortName?: string}>>([]);
   
+  // State for selected verses and presentations
+  const [selectedVerses, setSelectedVerses] = useState<string[]>([]);
+  const [generatingPpt, setGeneratingPpt] = useState(false);
+  
+  // Presentation options
+  const [pptOptions, setPptOptions] = useState({
+    size: '16:9',
+    versesPerSlide: 1,
+    backgroundColor: 'white',
+    textColor: 'black',
+    fontSize: 24
+  });
+  
+  // Subtitle options
+  const [subtitleOptions, setSubtitleOptions] = useState({
+    charsPerSlide: 100,  // Maximum characters per slide - but we'll break at word boundaries
+    backgroundColor: 'black',
+    textColor: 'white',
+    fontSize: 40
+  });
+  
   // State for books, chapters, and verses
   const [books, setBooks] = useState<Array<{id: string, name: string, number: number}>>([]);
   const [startChapters, setStartChapters] = useState<Array<{id: string, number: number}>>([]);
-  const [startVerses, setStartVerses] = useState<Array<{id: string, number: number, text?: string}>>([]);
+  const [startVerses, setStartVerses] = useState<Array<{id: string, number: number, text?: string, type?: string, urutan?: number}>>([]);
   const [endChapters, setEndChapters] = useState<Array<{id: string, number: number}>>([]);
-  const [endVerses, setEndVerses] = useState<Array<{id: string, number: number, text?: string}>>([]);
+  const [endVerses, setEndVerses] = useState<Array<{id: string, number: number, text?: string, type?: string, urutan?: number}>>([]);
   
   // Selection state
   const [selectedBook, setSelectedBook] = useState('');
@@ -360,8 +389,8 @@ export default function Home() {
       
       // Sort all content by urutan to ensure correct order
       allChapterContent.sort((a, b) => {
-        const aUrutan = a.urutan !== undefined ? a.urutan : a.number;
-        const bUrutan = b.urutan !== undefined ? b.urutan : b.number;
+        const aUrutan = 'urutan' in a && a.urutan !== undefined ? a.urutan : a.number;
+        const bUrutan = 'urutan' in b && b.urutan !== undefined ? b.urutan : b.number;
         return aUrutan - bUrutan;
       });
       
@@ -372,8 +401,8 @@ export default function Home() {
           id: item.id,
           number: item.number,
           text: item.text || '',
-          type: item.type || 'verse',
-          urutan: item.urutan !== undefined ? item.urutan : item.number
+          type: 'type' in item ? item.type : 'verse',
+          urutan: 'urutan' in item && item.urutan !== undefined ? item.urutan : item.number
         };
       });
       
@@ -574,6 +603,266 @@ export default function Home() {
     }
   };
 
+  // Handle verse selection
+  const handleVerseSelection = (verseKey: string) => {
+    setSelectedVerses(prev => {
+      if (prev.includes(verseKey)) {
+        return prev.filter(key => key !== verseKey);
+      } else {
+        return [...prev, verseKey];
+      }
+    });
+  };
+  
+  // Handle presentation option changes
+  const handlePptOptionChange = (option: string, value: string | number) => {
+    setPptOptions(prev => ({
+      ...prev,
+      [option]: value
+    }));
+  };
+  
+  // Handle subtitle option changes
+  const handleSubtitleOptionChange = (option: string, value: string | number) => {
+    setSubtitleOptions(prev => ({
+      ...prev,
+      [option]: value
+    }));
+  };
+  
+  // Helper function to strip HTML tags
+  const stripHtmlTags = (html: string): string => {
+    if (!html) return '';
+    
+    // Create a temporary div element
+    const tempDiv = document.createElement('div');
+    // Set the HTML content
+    tempDiv.innerHTML = html;
+    // Get the text content
+    return tempDiv.textContent || tempDiv.innerText || '';
+  };
+
+  // Generate and download PowerPoint
+  const generatePowerPoint = async (type: 'presentation' | 'subtitle') => {
+    if (!searchResults || selectedVerses.length === 0) {
+      setError('Pilih minimal satu ayat atau judul untuk dibuat presentasi.');
+      return;
+    }
+    
+    setGeneratingPpt(true);
+    
+    try {
+      // Client-side only
+      const pptxgen = (await import('pptxgenjs')).default;
+      
+      // Group verses for slides based on versesPerSlide or charsPerSlide
+      const versesToInclude = selectedVerses.sort((a, b) => {
+        // Sort by verse number or by position in versesOrder
+        if (searchResults.versesOrder) {
+          return searchResults.versesOrder.indexOf(a) - searchResults.versesOrder.indexOf(b);
+        }
+        
+        // Fallback sorting (titles first, then verse numbers)
+        if (a.startsWith('title-') && !b.startsWith('title-')) return -1;
+        if (!a.startsWith('title-') && b.startsWith('title-')) return 1;
+        
+        // Both are verses, sort by number
+        if (!a.startsWith('title-') && !b.startsWith('title-')) {
+          return parseInt(a) - parseInt(b);
+        }
+        
+        // Both are titles, maintain original order
+        return 0;
+      });
+      
+      // Initialize clean content map (with HTML stripped)
+      const cleanVerses: Record<string, string> = {};
+      for (const key in searchResults.verses) {
+        cleanVerses[key] = stripHtmlTags(searchResults.verses[key]);
+      }
+      
+      if (type === 'presentation') {
+        // Create a new presentation
+        const pres = new pptxgen();
+        
+        // Set slide size based on options
+        if (pptOptions.size === '16:9') {
+          pres.layout = 'LAYOUT_16x9';
+        } else {
+          pres.layout = 'LAYOUT_4x3';
+        }
+        
+        // Process verses in groups
+        for (let i = 0; i < versesToInclude.length; i += parseInt(pptOptions.versesPerSlide.toString())) {
+          const slideVerses = versesToInclude.slice(i, i + parseInt(pptOptions.versesPerSlide.toString()));
+          
+          // Create a new slide
+          const slide = pres.addSlide();
+          
+          // Set background color
+          slide.background = { color: pptOptions.backgroundColor };
+          
+          // Add title to the slide (book and chapter reference)
+          slide.addText(`${searchResults.book} ${searchResults.chapter}`, {
+            x: 0.5,
+            y: 0.5,
+            w: '90%',
+            h: 0.75,
+            fontSize: parseInt(pptOptions.fontSize.toString()) + 4,
+            color: pptOptions.textColor,
+            align: 'center',
+            bold: true
+          });
+          
+          // Combine text from selected verses for this slide
+          let slideContent = '';
+          
+          slideVerses.forEach((verseKey, idx) => {
+            if (verseKey.startsWith('title-')) {
+              // For section titles
+              slideContent += `${cleanVerses[verseKey]}\n\n`;
+            } else {
+              // For regular verses
+              slideContent += `${verseKey}. ${cleanVerses[verseKey]}\n\n`;
+            }
+          });
+          
+          // Add verse content to the slide
+          slide.addText(slideContent, {
+            x: 0.5,
+            y: 1.5,
+            w: '90%',
+            h: 4,
+            fontSize: parseInt(pptOptions.fontSize.toString()),
+            color: pptOptions.textColor,
+            align: 'center'
+          });
+        }
+        
+        // Save the presentation
+        pres.writeFile({ fileName: `${searchResults.book}_${searchResults.chapter}_presentasi.pptx` });
+      } else if (type === 'subtitle') {
+        // Create a subtitle version of the presentation
+        const subtitlePres = new pptxgen();
+        
+        // Set to 16:9 as requested
+        subtitlePres.layout = 'LAYOUT_16x9';
+        
+        // Process each verse individually to avoid mixing verses across slides
+        for (const verseKey of versesToInclude) {
+          // Get the clean verse text
+          const verseText = cleanVerses[verseKey];
+          
+          // Skip empty verses
+          if (!verseText || verseText.trim() === '') continue;
+          
+          // Get verse reference to display
+          let verseReference = '';
+          if (verseKey.startsWith('title-')) {
+            // For section titles, don't add a reference
+            verseReference = '';
+          } else {
+            // For regular verses, add chapter:verse
+            verseReference = `${searchResults.chapter}:${verseKey} `;
+          }
+          
+          // Prepare complete text with reference
+          const completeText = verseReference + verseText;
+          
+          // Split into words first
+          const words = completeText.trim().split(/\s+/);
+          const maxCharsPerSlide = parseInt(subtitleOptions.charsPerSlide.toString());
+          
+          // Process words for this verse
+          let currentSlideText = '';
+          let currentSlideChars = 0;
+          
+          for (let i = 0; i < words.length; i++) {
+            const word = words[i];
+            // Check if adding this word would exceed the character limit
+            if (currentSlideChars + word.length + 1 > maxCharsPerSlide && currentSlideText !== '') {
+              // Create a slide with current accumulated text
+              createSubtitleSlide(
+                subtitlePres, 
+                currentSlideText.trim(), 
+                subtitleOptions
+              );
+              
+              // Reset for next slide
+              currentSlideText = word;
+              currentSlideChars = word.length;
+            } else {
+              // Add word to current slide
+              if (currentSlideText === '') {
+                currentSlideText = word;
+              } else {
+                currentSlideText += ' ' + word;
+              }
+              currentSlideChars += word.length + (currentSlideText === word ? 0 : 1);
+            }
+          }
+          
+          // Don't forget the last slide if there's text left
+          if (currentSlideText.trim() !== '') {
+            createSubtitleSlide(
+              subtitlePres, 
+              currentSlideText.trim(), 
+              subtitleOptions
+            );
+          }
+        }
+        
+        // Helper function to create a subtitle slide with proper types
+        function createSubtitleSlide(
+          pres: any, 
+          text: string, 
+          options: { 
+            backgroundColor: string;
+            textColor: string;
+            fontSize: number;
+          }
+        ) {
+          // Create a new slide
+          const slide = pres.addSlide();
+          
+          // Set background color - ensure it matches exactly
+          let bgColor = options.backgroundColor;
+          // Convert common color names to hex to ensure consistency
+          if (bgColor === 'black') bgColor = '#000000';
+          if (bgColor === 'white') bgColor = '#FFFFFF';
+          if (bgColor === 'green') bgColor = '#008000';
+          if (bgColor === 'red') bgColor = '#FF0000';
+          
+          slide.background = { color: bgColor };
+          
+          // Add verse content to the slide (positioned 35pt higher than before)
+          slide.addText(text, {
+            x: 0.5,          // Center horizontally
+            y: 4.5,          // Position moved up by 35pt (about 0.5 inches)
+            w: '90%',        // Width of textbox
+            h: 1.0,          // Height of textbox
+            fontSize: parseInt(options.fontSize.toString()),
+            fontFace: 'Segoe UI Black',
+            color: options.textColor === 'white' ? '#FFFFFF' : 
+                   options.textColor === 'black' ? '#000000' : 
+                   options.textColor,
+            align: 'center',
+            valign: 'bottom',
+            margin: [0, 0, 1, 0] // bottom margin of 1pt
+          });
+        }
+        
+        // Save the subtitle presentation
+        subtitlePres.writeFile({ fileName: `${searchResults.book}_${searchResults.chapter}_subtitle.pptx` });
+      }
+    } catch (err) {
+      console.error('Error generating PowerPoint:', err);
+      setError('Terjadi kesalahan saat membuat presentasi PowerPoint.');
+    } finally {
+      setGeneratingPpt(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
       {/* Header */}
@@ -672,7 +961,7 @@ export default function Home() {
                     >
                       <option value="">Pilih Ayat</option>
                       {startVerses
-                        .filter(verse => verse.type !== 'title') // Only show actual verses, not section titles
+                        .filter(verse => !verse.type || verse.type !== 'title') // Only show actual verses, not section titles
                         .map(verse => (
                           <option key={verse.id} value={verse.id}>{verse.number}</option>
                         ))}
@@ -729,7 +1018,7 @@ export default function Home() {
                     >
                       <option value="">Pilih Ayat</option>
                       {endVerses
-                        .filter(verse => verse.type !== 'title') // Only show actual verses, not section titles
+                        .filter(verse => !verse.type || verse.type !== 'title') // Only show actual verses, not section titles
                         .map(verse => (
                           <option key={verse.id} value={verse.id}>{verse.number}</option>
                         ))}
@@ -810,49 +1099,335 @@ export default function Home() {
                   {searchResults.type === 'range' && `:${searchResults.startVerse}-${searchResults.endVerse}`}
                 </h3>
                 
-                <div className="bg-base-200 p-4 rounded-lg">
-                  {searchResults.versesOrder ? (
-                    // Use versesOrder to maintain exact ordering from Firestore
-                    searchResults.versesOrder.map(key => {
-                      const text = searchResults.verses[key];
-                      // Check if this is a section title (key starts with 'title-')
-                      const isTitle = key.startsWith('title-');
-                      
-                      // Determine if this verse should be highlighted
-                      const isHighlighted = !isTitle && 
-                        parseInt(key) >= parseInt(searchResults.highlightStart || '0') && 
-                        parseInt(key) <= parseInt(searchResults.highlightEnd || '0');
-                      
-                      return (
-                        <div 
-                          key={key} 
-                          className={`mb-2 last:mb-0 ${isTitle ? 'font-bold text-purple-600 mt-4 mb-3' : ''} ${isHighlighted ? 'bg-yellow-100 p-1 rounded' : ''}`}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Left column: Verse selection */}
+                  <div className="md:col-span-2 bg-base-200 p-4 rounded-lg">
+                    {searchResults.versesOrder ? (
+                      // Use versesOrder to maintain exact ordering from Firestore
+                      searchResults.versesOrder.map(key => {
+                        const text = searchResults.verses[key];
+                        // Check if this is a section title (key starts with 'title-')
+                        const isTitle = key.startsWith('title-');
+                        
+                        // Determine if this verse should be highlighted
+                        const isHighlighted = !isTitle && 
+                          parseInt(key) >= parseInt(searchResults.highlightStart || '0') && 
+                          parseInt(key) <= parseInt(searchResults.highlightEnd || '0');
+                        
+                        return (
+                          <div 
+                            key={key} 
+                            className={`mb-2 last:mb-0 ${isTitle ? 'font-bold text-purple-600 mt-4 mb-3' : ''} ${isHighlighted ? 'bg-yellow-100 p-1 rounded' : ''} flex items-start gap-2`}
+                          >
+                            <input
+                              type="checkbox"
+                              id={`verse-${key}`}
+                              className="checkbox checkbox-sm mt-1"
+                              checked={selectedVerses.includes(key)}
+                              onChange={() => handleVerseSelection(key)}
+                            />
+                            <div>
+                              {!isTitle && <span className="font-bold mr-2">{key}</span>}
+                              <span dangerouslySetInnerHTML={{ __html: text }} />
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      // Fallback to old behavior
+                      Object.entries(searchResults.verses).map(([verseNum, text]) => {
+                        // Check if this is a section title
+                        const isTitle = verseNum.startsWith('title-');
+                        
+                        return (
+                          <div key={verseNum} className={`mb-2 last:mb-0 ${isTitle ? 'font-bold text-purple-600 mt-4 mb-3' : ''} flex items-start gap-2`}>
+                            <input
+                              type="checkbox"
+                              id={`verse-${verseNum}`}
+                              className="checkbox checkbox-sm mt-1"
+                              checked={selectedVerses.includes(verseNum)}
+                              onChange={() => handleVerseSelection(verseNum)}
+                            />
+                            <div>
+                              {!isTitle && <span className="font-bold mr-2">{verseNum}</span>}
+                              <span dangerouslySetInnerHTML={{ __html: text }} />
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                  
+                  {/* Right column: Presentation options */}
+                  <div className="bg-base-200 p-4 rounded-lg">
+                    <h4 className="font-bold text-lg mb-3">Opsi Presentasi</h4>
+                    
+                    <div className="space-y-3">
+                      <div className="form-control">
+                        <label className="label">
+                          <span className="label-text">Ukuran PPT</span>
+                        </label>
+                        <select 
+                          className="select select-bordered w-full" 
+                          value={pptOptions.size}
+                          onChange={(e) => handlePptOptionChange('size', e.target.value)}
                         >
-                          {!isTitle && <span className="font-bold mr-2">{key}</span>}
-                          <span dangerouslySetInnerHTML={{ __html: text }} />
-                        </div>
-                      );
-                    })
-                  ) : (
-                    // Fallback to old behavior
-                    Object.entries(searchResults.verses).map(([verseNum, text]) => {
-                      // Check if this is a section title
-                      const isTitle = verseNum.startsWith('title-');
+                          <option value="16:9">16:9</option>
+                          <option value="4:3">4:3</option>
+                        </select>
+                      </div>
                       
-                      return (
-                        <div key={verseNum} className={`mb-2 last:mb-0 ${isTitle ? 'font-bold text-purple-600 mt-4 mb-3' : ''}`}>
-                          {!isTitle && <span className="font-bold mr-2">{verseNum}</span>}
-                          <span dangerouslySetInnerHTML={{ __html: text }} />
+                      <div className="form-control">
+                        <label className="label">
+                          <span className="label-text">Ayat per Slide</span>
+                        </label>
+                        <select 
+                          className="select select-bordered w-full" 
+                          value={pptOptions.versesPerSlide}
+                          onChange={(e) => handlePptOptionChange('versesPerSlide', parseInt(e.target.value))}
+                        >
+                          {[1, 2, 3, 4, 5].map(num => (
+                            <option key={num} value={num}>{num}</option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      <div className="form-control">
+                        <label className="label">
+                          <span className="label-text">Warna Latar</span>
+                        </label>
+                        <select 
+                          className="select select-bordered w-full" 
+                          value={pptOptions.backgroundColor}
+                          onChange={(e) => handlePptOptionChange('backgroundColor', e.target.value)}
+                        >
+                          <option value="white">Putih</option>
+                          <option value="black">Hitam</option>
+                          <option value="green">Hijau</option>
+                          <option value="red">Merah</option>
+                        </select>
+                      </div>
+                      
+                      <div className="form-control">
+                        <label className="label">
+                          <span className="label-text">Warna Teks</span>
+                        </label>
+                        <select 
+                          className="select select-bordered w-full" 
+                          value={pptOptions.textColor}
+                          onChange={(e) => handlePptOptionChange('textColor', e.target.value)}
+                        >
+                          <option value="black">Hitam</option>
+                          <option value="white">Putih</option>
+                        </select>
+                      </div>
+                      
+                      <div className="form-control">
+                        <label className="label">
+                          <span className="label-text">Ukuran Font</span>
+                        </label>
+                        <select 
+                          className="select select-bordered w-full" 
+                          value={pptOptions.fontSize}
+                          onChange={(e) => handlePptOptionChange('fontSize', parseInt(e.target.value))}
+                        >
+                          {[18, 20, 22, 24, 28, 32, 36].map(size => (
+                            <option key={size} value={size}>{size} pt</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    
+                    <div className="divider">
+                      <div className="badge badge-primary">ATAU</div>
+                    </div>
+                    
+                    <h4 className="font-bold text-lg mb-3">Opsi Subtitle</h4>
+                    <p className="text-sm text-gray-600 mb-3">Subtitle akan menghasilkan file terpisah dengan format 16:9 dan teks hanya di bagian bawah slide.</p>
+                    
+                    <div className="space-y-3">
+                      <div className="form-control">
+                        <label className="label">
+                          <span className="label-text">Maksimum Karakter per Slide</span>
+                        </label>
+                        <input 
+                          type="number" 
+                          className="input input-bordered w-full" 
+                          value={subtitleOptions.charsPerSlide}
+                          onChange={(e) => handleSubtitleOptionChange('charsPerSlide', parseInt(e.target.value) || 100)}
+                          min="10"
+                          max="500"
+                        />
+                        <label className="label">
+                          <span className="label-text-alt text-info">Teks akan dipenggal per kata, tidak per huruf</span>
+                        </label>
+                      </div>
+                      
+                      <div className="form-control">
+                        <label className="label">
+                          <span className="label-text">Warna Latar</span>
+                        </label>
+                        <select 
+                          className="select select-bordered w-full" 
+                          value={subtitleOptions.backgroundColor}
+                          onChange={(e) => handleSubtitleOptionChange('backgroundColor', e.target.value)}
+                        >
+                          <option value="black">Hitam</option>
+                          <option value="white">Putih</option>
+                          <option value="green">Hijau</option>
+                          <option value="red">Merah</option>
+                        </select>
+                      </div>
+                      
+                      <div className="form-control">
+                        <label className="label">
+                          <span className="label-text">Warna Teks</span>
+                        </label>
+                        <select 
+                          className="select select-bordered w-full" 
+                          value={subtitleOptions.textColor}
+                          onChange={(e) => handleSubtitleOptionChange('textColor', e.target.value)}
+                        >
+                          <option value="white">Putih</option>
+                          <option value="black">Hitam</option>
+                        </select>
+                      </div>
+                      
+                      <div className="form-control">
+                        <label className="label">
+                          <span className="label-text">Ukuran Font</span>
+                        </label>
+                        <input 
+                          type="number" 
+                          className="input input-bordered w-full" 
+                          value={subtitleOptions.fontSize}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleSubtitleOptionChange('fontSize', parseInt(e.target.value) || 40)}
+                          min="12"
+                          max="72"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="mt-6 grid grid-cols-1 gap-3">
+                      <button 
+                        className="btn btn-primary w-full"
+                        onClick={() => generatePowerPoint('presentation')}
+                        disabled={selectedVerses.length === 0 || generatingPpt}
+                      >
+                        {generatingPpt ? (
+                          <>
+                            <span className="loading loading-spinner loading-sm"></span>
+                            Membuat Presentasi...
+                          </>
+                        ) : 'Buat Presentasi (Teks di Tengah)'}
+                      </button>
+                      
+                      <button 
+                        className="btn btn-secondary w-full"
+                        onClick={() => generatePowerPoint('subtitle')}
+                        disabled={selectedVerses.length === 0 || generatingPpt}
+                      >
+                        {generatingPpt ? (
+                          <>
+                            <span className="loading loading-spinner loading-sm"></span>
+                            Membuat Subtitle...
+                          </>
+                        ) : 'Buat Subtitle (Teks di Bawah)'}
+                      </button>
+                    </div>
+                    
+                    {/* Simple preview */}
+                    {selectedVerses.length > 0 && (
+                      <div className="mt-4">
+                        <h5 className="font-bold mb-2">Preview Presentasi</h5>
+                        <div 
+                          className="h-32 w-full rounded overflow-hidden flex items-center justify-center text-center p-2 mb-3"
+                          style={{ 
+                            backgroundColor: pptOptions.backgroundColor,
+                            color: pptOptions.textColor,
+                            fontSize: `${pptOptions.fontSize / 2}px`
+                          }}
+                        >
+                          <div>
+                            <div className="font-bold mb-1">{searchResults.book} {searchResults.chapter}</div>
+                            {selectedVerses.slice(0, parseInt(pptOptions.versesPerSlide.toString())).map(key => (
+                              <div key={`preview-${key}`} className="text-sm">
+                                {key.startsWith('title-') ? (
+                                  <span className="italic">{stripHtmlTags(searchResults.verses[key])}</span>
+                                ) : (
+                                  <span>{key}. {stripHtmlTags(searchResults.verses[key])}</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      );
-                    })
-                  )}
-                </div>
-                
-                <div className="mt-4 flex justify-end">
-                  <Link href="/signin" className="btn btn-primary btn-sm">
-                    Buat Presentasi dari Ayat Ini
-                  </Link>
+                        
+                        <h5 className="font-bold mb-2">Preview Subtitle</h5>
+                        <div 
+                          className="h-32 w-full rounded overflow-hidden relative"
+                          style={{ 
+                            backgroundColor: subtitleOptions.backgroundColor === 'black' ? '#000000' : 
+                                             subtitleOptions.backgroundColor === 'white' ? '#FFFFFF' :
+                                             subtitleOptions.backgroundColor === 'green' ? '#008000' :
+                                             subtitleOptions.backgroundColor === 'red' ? '#FF0000' : 
+                                             subtitleOptions.backgroundColor,
+                            aspectRatio: '16/9'
+                          }}
+                        >
+                          <div 
+                            className="absolute text-center pb-1"
+                            style={{
+                              fontSize: `${subtitleOptions.fontSize / 2}px`,
+                              fontFamily: 'Segoe UI Black, sans-serif',
+                              color: subtitleOptions.textColor === 'white' ? '#FFFFFF' : 
+                                     subtitleOptions.textColor === 'black' ? '#000000' : 
+                                     subtitleOptions.textColor,
+                              bottom: '20%', // Move up from bottom to match the new positioning
+                              left: 0,
+                              right: 0
+                            }}
+                          >
+                            {(() => {
+                              // Get first verse only for preview
+                              if (selectedVerses.length === 0) return '';
+                              
+                              const firstVerseKey = selectedVerses[0];
+                              // Add verse reference if it's not a title
+                              const verseReference = !firstVerseKey.startsWith('title-') ? 
+                                `${searchResults.chapter}:${firstVerseKey} ` : '';
+                              
+                              const previewVerseText = stripHtmlTags(searchResults.verses[firstVerseKey]);
+                              const completeText = verseReference + previewVerseText;
+                              
+                              // Split into words
+                              const words = completeText.trim().split(/\s+/);
+                              const maxChars = subtitleOptions.charsPerSlide;
+                              
+                              // Add words until we reach the character limit
+                              let previewText = '';
+                              let charCount = 0;
+                              
+                              for (const word of words) {
+                                if (charCount + word.length + (previewText ? 1 : 0) > maxChars) {
+                                  break;
+                                }
+                                
+                                if (previewText === '') {
+                                  previewText = word;
+                                } else {
+                                  previewText += ' ' + word;
+                                }
+                                
+                                charCount += word.length + (previewText === word ? 0 : 1);
+                              }
+                              
+                              return previewText;
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
