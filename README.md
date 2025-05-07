@@ -1,38 +1,97 @@
-# bible-ppt
+# Bible PPT Generator
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Getting Started
+Bible PPT Generator adalah aplikasi web yang memungkinkan Anda membuat presentasi PowerPoint dari ayat-ayat Alkitab dengan mudah dan cepat. Dibangun menggunakan Next.js, aplikasi ini menyediakan antarmuka yang intuitif untuk membuat presentasi yang menarik dari firman Tuhan.
 
-First, run the development server:
+## 🌟 Fitur Utama
 
+- **Pencarian Ayat Cepat**: Cari ayat Alkitab dengan mudah menggunakan fitur pencarian yang responsif
+- **Multiple Versions**: Dukungan untuk berbagai versi Alkitab (KJV, NIV, TB, dll)
+- **Template Presentasi**: Berbagai template menarik yang dapat disesuaikan
+- **Export PPT**: Ekspor presentasi langsung ke format PowerPoint (.pptx)
+- **Custom Styling**: Kustomisasi tampilan slide sesuai kebutuhan
+- **Responsive Design**: Antarmuka yang responsif untuk berbagai ukuran layar
+
+## 🚀 Memulai
+
+1. Clone repository ini:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/yourusername/bible-ppt.git
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Install dependencies:
+```bash
+npm install
+# atau
+yarn install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Jalankan server development:
+```bash
+npm run dev
+# atau
+yarn dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. Buka [http://localhost:3000](http://localhost:3000) di browser Anda
 
-## Learn More
+## 💡 Cara Penggunaan
 
-To learn more about Next.js, take a look at the following resources:
+1. **Membuat Presentasi Baru**
+   - Klik tombol "New Presentation"
+   - Pilih template yang diinginkan
+   - Masukkan judul presentasi
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+2. **Menambahkan Ayat**
+   - Gunakan fitur pencarian untuk menemukan ayat
+   - Pilih versi Alkitab yang diinginkan
+   - Klik "Add to Presentation"
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+3. **Kustomisasi Slide**
+   - Atur tata letak slide
+   - Pilih tema warna
+   - Tambahkan gambar atau ilustrasi
 
-## Deploy on Vercel
+4. **Export Presentasi**
+   - Klik tombol "Export"
+   - Pilih format PowerPoint
+   - Download file presentasi
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 🔜 Fitur yang Akan Datang
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [ ] Integrasi dengan API Alkitab tambahan
+- [ ] Fitur kolaborasi real-time
+- [ ] Template animasi
+- [ ] Dukungan untuk berbagai bahasa
+- [ ] Fitur sharing presentasi
+- [ ] Mode offline
+- [ ] Integrasi dengan Google Drive/Dropbox
+- [ ] Fitur pencetakan langsung
+
+## 🛠️ Teknologi yang Digunakan
+
+- Next.js 14
+- React
+- TypeScript
+- Tailwind CSS
+- PPTXGenJS
+- Bible API
+
+## 🤝 Kontribusi
+
+Kami sangat menghargai kontribusi dari komunitas! Jika Anda ingin berkontribusi:
+
+1. Fork repository ini
+2. Buat branch fitur baru (`git checkout -b feature/AmazingFeature`)
+3. Commit perubahan Anda (`git commit -m 'Add some AmazingFeature'`)
+4. Push ke branch (`git push origin feature/AmazingFeature`)
+5. Buka Pull Request
+
+## 📝 Lisensi
+
+Proyek ini dilisensikan di bawah Lisensi MIT - lihat file [LICENSE](LICENSE) untuk detail lebih lanjut.
+
+## 📞 Kontak
+
+Jika Anda memiliki pertanyaan atau saran, silakan buka issue di repository ini atau hubungi kami melalui email di [your-email@example.com](mailto:your-email@example.com).
