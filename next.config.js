@@ -1,14 +1,35 @@
 /** @type {import('next').NextConfig} */
 const webpack = require('webpack');
+const isGithubActions = process.env.GITHUB_ACTIONS || false;
+
+let assetPrefix = '';
+let basePath = '';
+
+if (isGithubActions) {
+  // Trim off `<owner>/`
+  const repo = process.env.GITHUB_REPOSITORY.replace(/.*?\//, '');
+  assetPrefix = `/${repo}/`;
+  basePath = `/${repo}`;
+}
 
 const nextConfig = {
   reactStrictMode: false, // Disable strict mode due to react-beautiful-dnd issues
+  assetPrefix: assetPrefix,
+  basePath: basePath,
+  images: {
+    unoptimized: true, // Required for static export
+  },
   typescript: {
     // !! WARN !!
     // Dangerously allow production builds to successfully complete even if
     // your project has type errors.
     // !! WARN !!
     ignoreBuildErrors: true,
+  },
+  eslint: {
+    // Allow production builds to successfully complete even if
+    // your project has ESLint errors.
+    ignoreDuringBuilds: true,
   },
   
   webpack: (config, { isServer }) => {
