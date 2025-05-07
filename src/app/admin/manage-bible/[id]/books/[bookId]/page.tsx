@@ -48,9 +48,8 @@ type PageProps = {
 };
 
 export default function ManageBookChapters({ params }: PageProps) {
-    // Unwrap params with React.use() for future compatibility with Next.js
-    const unwrappedParams = React.use(params as any) as { id: string; bookId: string };
-    const { id, bookId } = unwrappedParams;
+    // Use params directly without React.use()
+    const { id, bookId } = params;
     
     const { user } = useAuthContext() as { user: any };
     const router = useRouter();
