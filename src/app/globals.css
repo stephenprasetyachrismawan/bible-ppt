@@ -1,6 +1,51 @@
 @import "tailwindcss";
 @plugin "daisyui";
 
+/* Force light mode for all users regardless of system preference */
+:root {
+  color-scheme: light;
+}
+
+/* Override dark mode media query */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: light;
+  }
+}
+
+/* Ensure base colors are light */
+html {
+  background-color: white;
+  color: black;
+}
+
+/* Ensure text on primary (purple) buttons is cream colored instead of black */
+.btn-primary, 
+button.btn-primary, 
+a.btn-primary {
+  color: #FFF8E1 !important; /* Cream color */
+  font-weight: 500 !important;
+  text-shadow: 0px 1px 1px rgba(0, 0, 0, 0.2) !important; /* Subtle text shadow for better contrast */
+}
+
+/* For hover state on primary buttons */
+.btn-primary:hover, 
+button.btn-primary:hover, 
+a.btn-primary:hover {
+  color: #FFF8E1 !important; /* Keep cream color on hover */
+}
+
+/* More specific targeting for different button components */
+[class*="btn-primary"] {
+  color: #FFF8E1 !important;
+}
+
+/* DaisyUI specific primary button targeting */
+.btn.btn-primary {
+  --tw-text-opacity: 1;
+  color: #FFF8E1 !important;
+}
+
 /* Add custom scrollbar styling */
 .custom-scrollbar::-webkit-scrollbar {
   width: 8px;
@@ -18,4 +63,19 @@
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #555;
+}
+
+/* Super specific selectors to override any conflicting styles */
+button[class*="btn-primary"], 
+a[class*="btn-primary"],
+.btn-primary *,
+.btn.btn-primary span,
+.btn.btn-primary div {
+  color: #FFF8E1 !important;
+}
+
+/* Reset any daisyUI variable that might be overriding our text color */
+:root {
+  --btn-primary-color: #FFF8E1 !important;
+  --p-content: #FFF8E1 !important;
 }

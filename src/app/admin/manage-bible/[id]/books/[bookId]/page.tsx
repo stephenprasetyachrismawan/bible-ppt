@@ -1,7 +1,7 @@
 'use client'
 import React, { useState, useEffect } from "react";
 import { useAuthContext } from "@/context/AuthContext";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import getDocument from "@/firebase/firestore/getData";
 import getSubCollection from "@/firebase/firestore/getSubCollection";
 import addSubCollectionDoc from "@/firebase/firestore/addSubCollection";
@@ -40,16 +40,14 @@ type BibleVersion = {
     updatedAt: string;
 };
 
-type PageProps = {
-    params: {
+export default function ManageBookChapters() {
+    // Get params using useParams with proper TypeScript generics
+    const params = useParams<{
         id: string;
         bookId: string;
-    };
-};
-
-export default function ManageBookChapters({ params }: PageProps) {
-    // Use params directly without React.use()
-    const { id, bookId } = params;
+    }>();
+    const id = params.id;
+    const bookId = params.bookId;
     
     const { user } = useAuthContext() as { user: any };
     const router = useRouter();

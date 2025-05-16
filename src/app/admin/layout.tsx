@@ -18,20 +18,20 @@ export default function AdminLayout({
   }, [user, router]);
 
   return (
-    <div className="drawer lg:drawer-open">
+    <div className="drawer lg:drawer-open bg-white text-black">
       <input id="drawer-toggle" type="checkbox" className="drawer-toggle" />
-      <div className="drawer-content flex flex-col">
+      <div className="drawer-content flex flex-col bg-white text-black">
         {/* Navbar */}
-        <div className="navbar bg-base-300">
+        <div className="navbar bg-gray-100 text-black">
           <div className="flex-none lg:hidden">
-            <label htmlFor="drawer-toggle" className="btn btn-square btn-ghost">
+            <label htmlFor="drawer-toggle" className="btn btn-square btn-ghost text-black">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="inline-block w-6 h-6 stroke-current">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path>
               </svg>
             </label>
           </div>
           <div className="flex-1">
-            <span className="text-xl font-bold">Admin Dashboard</span>
+            <span className="text-xl font-bold text-black">Admin Dashboard</span>
           </div>
           <div className="flex-none">
             <div className="dropdown dropdown-end">
@@ -42,7 +42,7 @@ export default function AdminLayout({
                   </div>
                 </div>
               </label>
-              <ul tabIndex={0} className="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52">
+              <ul tabIndex={0} className="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-white text-black border border-gray-200 rounded-box w-52">
                 <li><a onClick={async () => {
                   const { success, error } = await signOutUser();
                   if (success) {
@@ -50,7 +50,7 @@ export default function AdminLayout({
                   } else {
                     console.error('Logout failed:', error);
                   }
-                }}>Logout</a></li>
+                }} className="text-black hover:bg-gray-100">Logout</a></li>
               </ul>
             </div>
           </div>
@@ -65,12 +65,12 @@ export default function AdminLayout({
       {/* Sidebar */}
       <div className="drawer-side">
         <label htmlFor="drawer-toggle" className="drawer-overlay"></label> 
-        <ul className="menu p-4 w-64 h-full bg-base-200 text-base-content">
+        <ul className="menu p-4 w-64 h-full bg-gray-50 text-black border-r border-gray-200">
           <li className="mb-2">
-            <h2 className="menu-title text-lg font-bold">Bible PPT Admin</h2>
+            <h2 className="menu-title text-lg font-bold text-black">Bible PPT Admin</h2>
           </li>
-          <li><Link href="/admin">Dashboard</Link></li>
-          <li><Link href="/admin/add-bible-version">Tambah Versi Bible</Link></li>
+          <li><Link href="/admin" className="text-black hover:bg-gray-100">Dashboard</Link></li>
+          <li><Link href="/admin/add-bible-version" className="text-black hover:bg-gray-100">Tambah Versi Bible</Link></li>
         </ul>
       </div>
     </div>

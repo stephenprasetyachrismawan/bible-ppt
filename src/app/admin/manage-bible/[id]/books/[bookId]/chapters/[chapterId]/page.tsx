@@ -12,12 +12,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Plus, Trash2, GripVertical } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, GripVertical, Upload, Image } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { collection, query, where, getDocs, doc, updateDoc, addDoc, deleteDoc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { extractVersesFromImage, ExtractedVerse as GeminiExtractedVerse } from '@/services/geminiService';
+import { GEMINI_API_KEY } from '@/config/geminiConfig';
+import GeminiConfigForm from '@/components/GeminiConfigForm';
 
 // Dynamically import CustomQuillEditor to avoid SSR issues
 const QuillEditor = dynamic(() => import('@/components/CustomQuillEditor'), { 
@@ -86,6 +89,9 @@ interface SortableVerseProps {
   onEdit: (verse: Verse) => void;
 }
 
+// Interface for extracted verse from Gemini API
+interface ExtractedVerse extends GeminiExtractedVerse {}
+
 function SortableVerse({ verse, onDelete, onEdit }: SortableVerseProps) {
   const {
     attributes,
@@ -106,7 +112,7 @@ function SortableVerse({ verse, onDelete, onEdit }: SortableVerseProps) {
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-center gap-4 p-4 border rounded-lg ${verse.type === 'title' ? 'bg-blue-50' : 'bg-white'}`}
+      className={`flex items-center gap-4 p-4 border rounded-lg text-black ${verse.type === 'title' ? 'bg-blue-50' : 'bg-white'}`}
     >
       <div
         {...attributes}
@@ -149,8 +155,17 @@ function SortableVerse({ verse, onDelete, onEdit }: SortableVerseProps) {
 }
 
 export default function ManageChapterVerses() {
-  const params = useParams();
+  // Access params directly as an object (no React.use needed for this approach)
   const router = useRouter();
+  const params = useParams<{
+    id: string;
+    bookId: string;
+    chapterId: string;
+  }>();
+  const id = params.id;
+  const bookId = params.bookId;
+  const chapterId = params.chapterId;
+  
   const { user } = useAuthContext() as { user: any };
   
   // State
@@ -177,7 +192,19 @@ export default function ManageChapterVerses() {
   const [isDragging, setIsDragging] = useState(false);
   const dragRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [resetEditor, setResetEditor] = useState(false);
-
+  
+  // New state for image upload and Gemini API
+  const [uploadedImage, setUploadedImage] = useState<File | null>(null);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [extractedVerses, setExtractedVerses] = useState<ExtractedVerse[]>([]);
+  const [processingImage, setProcessingImage] = useState(false);
+  const [geminiError, setGeminiError] = useState<string | null>(null);
+  const [activeExtractedVerse, setActiveExtractedVerse] = useState<ExtractedVerse | null>(null);
+  
+  // New state for Gemini API key
+  const [geminiApiKey, setGeminiApiKey] = useState<string>('');
+  const [showApiKeyForm, setShowApiKeyForm] = useState<boolean>(true);
+  
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -195,7 +222,7 @@ export default function ManageChapterVerses() {
     async function fetchBook() {
       setLoading(true);
       try {
-        const { result, error } = await getDocument('bible', params.id, 'books', params.bookId);
+        const { result, error } = await getDocument('bible', id, 'books', bookId);
         if (error) {
           throw new Error(error.toString() || "Failed to fetch book");
         }
@@ -219,21 +246,21 @@ export default function ManageChapterVerses() {
     }
 
     fetchBook();
-  }, [params.id, params.bookId]);
+  }, [id, bookId]);
 
   // Fetch chapter data
   useEffect(() => {
     const fetchChapter = async () => {
-      if (!params.id || !params.bookId || !params.chapterId) return;
+      if (!id || !bookId || !chapterId) return;
 
       console.log('Fetching chapter with params:', {
-        bibleId: params.id,
-        bookId: params.bookId,
-        chapterId: params.chapterId
+        bibleId: id,
+        bookId: bookId,
+        chapterId: chapterId
       });
 
       try {
-        const chapterRef = doc(db, 'bible', params.id as string, 'books', params.bookId as string, 'chapters', params.chapterId as string);
+        const chapterRef = doc(db, 'bible', id, 'books', bookId, 'chapters', chapterId);
         console.log('Chapter document path:', chapterRef.path);
         
         const chapterDoc = await getDoc(chapterRef);
@@ -275,8 +302,8 @@ export default function ManageChapterVerses() {
           console.error('Chapter document does not exist at path:', chapterRef.path);
           // Create empty chapter if it doesn't exist
           setChapter({
-            id: params.chapterId as string,
-            number: parseInt(params.chapterId as string),
+            id: chapterId,
+            number: parseInt(chapterId),
             verses: []
           });
           setVerses([]);
@@ -291,7 +318,21 @@ export default function ManageChapterVerses() {
     };
 
     fetchChapter();
-  }, [params.id, params.bookId, params.chapterId]);
+  }, [id, bookId, chapterId]);
+
+  // Initialize API key from localStorage on client side
+  useEffect(() => {
+    const savedKey = localStorage.getItem('gemini_api_key');
+    if (savedKey) {
+      setGeminiApiKey(savedKey);
+      setShowApiKeyForm(false);
+    } else if (GEMINI_API_KEY) {
+      setGeminiApiKey(GEMINI_API_KEY);
+      setShowApiKeyForm(false);
+    } else {
+      setShowApiKeyForm(true);
+    }
+  }, []);
 
   const handleDragEnd = async (event: DragEndEvent) => {
     if (!chapter) return;
@@ -313,7 +354,7 @@ export default function ManageChapterVerses() {
 
     try {
       // Update each verse document individually
-      const chapterRef = doc(db, 'bible', params.id as string, 'books', params.bookId as string, 'chapters', params.chapterId as string);
+      const chapterRef = doc(db, 'bible', id, 'books', bookId, 'chapters', chapterId);
       
       // Update each verse in the subcollection
       const promises = updatedVerses.map(verse => {
@@ -336,16 +377,22 @@ export default function ManageChapterVerses() {
 
   // Handle editing a verse or section title
   const handleEditVerse = (verse: Verse) => {
-    setCurrentVerse(verse);
-    setNewVerse({
-      number: verse.number,
-      text: verse.text || '',
-      type: verse.type,
-      urutan: verse.urutan
-    });
-    setContentType(verse.type);
-    setIsEditing(true);
-    setShowVerseForm(true);
+    // First reset the editor state to ensure it updates properly
+    setResetEditor(prev => !prev);
+    
+    // Increased delay to ensure state resets before setting new values
+    setTimeout(() => {
+      setCurrentVerse(verse);
+      setNewVerse({
+        number: verse.number,
+        text: verse.text || '',
+        type: verse.type,
+        urutan: verse.urutan
+      });
+      setContentType(verse.type);
+      setIsEditing(true);
+      setShowVerseForm(true);
+    }, 100);
   };
 
   // Handle deleting a verse or section title
@@ -365,7 +412,7 @@ export default function ManageChapterVerses() {
     setCurrentVerse(null);
     
     try {
-      const chapterRef = doc(db, 'bible', params.id as string, 'books', params.bookId as string, 'chapters', params.chapterId as string);
+      const chapterRef = doc(db, 'bible', id, 'books', bookId, 'chapters', chapterId);
       const verseRef = doc(chapterRef, 'verses', verseId);
       await deleteDoc(verseRef);
       
@@ -460,7 +507,7 @@ export default function ManageChapterVerses() {
           updatedAt: new Date().toISOString(),
         };
         
-        const chapterRef = doc(db, 'bible', params.id as string, 'books', params.bookId as string, 'chapters', params.chapterId as string);
+        const chapterRef = doc(db, 'bible', id, 'books', bookId, 'chapters', chapterId);
         const verseRef = doc(chapterRef, 'verses', currentVerse.id);
         await updateDoc(verseRef, updatedVerseData);
         
@@ -537,7 +584,7 @@ export default function ManageChapterVerses() {
           createdBy: user.uid
         };
         
-        const chapterRef = doc(db, 'bible', params.id as string, 'books', params.bookId as string, 'chapters', params.chapterId as string);
+        const chapterRef = doc(db, 'bible', id, 'books', bookId, 'chapters', chapterId);
         const verseRef = doc(chapterRef, 'verses', verseId);
         await setDoc(verseRef, newVerseData);
         
@@ -621,6 +668,140 @@ export default function ManageChapterVerses() {
     }
   }, [showVerseForm, isEditing, contentType, verses]);
 
+  // Handle file upload
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    // Reset any previous errors or results
+    setGeminiError(null);
+    setExtractedVerses([]);
+    
+    // Store the file and create a URL for preview
+    setUploadedImage(file);
+    const imageUrl = URL.createObjectURL(file);
+    setUploadedImageUrl(imageUrl);
+  };
+
+  // Handle API key update
+  const handleApiKeySet = (key: string) => {
+    setGeminiApiKey(key);
+    setShowApiKeyForm(false);
+    setGeminiError(null);
+  };
+  
+  // Process image with Gemini API
+  const processImage = async () => {
+    if (!uploadedImage) {
+      setGeminiError('Please upload an image first');
+      return;
+    }
+    
+    if (!geminiApiKey) {
+      setGeminiError('Please set your Google Gemini API key first');
+      setShowApiKeyForm(true);
+      return;
+    }
+    
+    setProcessingImage(true);
+    setGeminiError(null);
+    
+    try {
+      // Process the image with Gemini API
+      const extractedVerses = await extractVersesFromImage(uploadedImage, geminiApiKey);
+      
+      if (extractedVerses.length === 0) {
+        setGeminiError('No verses could be extracted from the image. Please try a clearer image or different format.');
+      } else {
+        setExtractedVerses(extractedVerses);
+      }
+    } catch (err: any) {
+      console.error('Error processing image with Gemini API:', err);
+      setGeminiError(err.message || 'Failed to process image');
+      
+      // Show API key form if the error is related to authentication
+      if (err.message && (
+        err.message.includes('API key') || 
+        err.message.includes('authentication') || 
+        err.message.includes('unauthorized') ||
+        err.message.includes('permission')
+      )) {
+        setShowApiKeyForm(true);
+      }
+    } finally {
+      setProcessingImage(false);
+    }
+  };
+  
+  // Add extracted verse to the chapter
+  const addExtractedVerse = async (extractedVerse: ExtractedVerse) => {
+    setAddingVerse(true);
+    
+    try {
+      const verseId = uuidv4();
+      
+      // Calculate the highest urutan value to position new content at the end
+      const highestUrutan = verses.length > 0 
+        ? Math.max(...verses.map(v => v.urutan))
+        : 0;
+        
+      const newVerseData = {
+        id: verseId,
+        number: parseInt(extractedVerse.verseNumber),
+        text: extractedVerse.verseText,
+        type: 'verse',
+        urutan: highestUrutan + 1, // Place at the end
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: user.uid
+      };
+      
+      const chapterRef = doc(db, 'bible', id, 'books', bookId, 'chapters', chapterId);
+      const verseRef = doc(chapterRef, 'verses', verseId);
+      await setDoc(verseRef, newVerseData);
+      
+      // Add new verse to state
+      const updatedVerses = [...verses, newVerseData as Verse].sort((a, b) => a.urutan - b.urutan);
+      setVerses(updatedVerses);
+      
+      // Also update in chapter state
+      if (chapter) {
+        setChapter(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            verses: [...prev.verses, newVerseData as Verse].sort((a, b) => a.urutan - b.urutan)
+          };
+        });
+      }
+      
+    } catch (err: any) {
+      console.error("Error adding extracted verse:", err);
+      setVersesError(err.message || "Failed to add extracted verse");
+    } finally {
+      setAddingVerse(false);
+    }
+  };
+  
+  // Edit extracted verse before adding
+  const editExtractedVerse = (extractedVerse: ExtractedVerse) => {
+    setActiveExtractedVerse(extractedVerse);
+    setNewVerse({
+      number: parseInt(extractedVerse.verseNumber),
+      text: extractedVerse.verseText,
+      type: 'verse',
+      urutan: 0
+    });
+    setContentType('verse');
+    setIsEditing(false); // Not editing an existing verse
+    setShowVerseForm(true);
+  };
+
+  // Delete extracted verse from the list
+  const deleteExtractedVerse = (verseId: string) => {
+    setExtractedVerses(prev => prev.filter(v => v.id !== verseId));
+  };
+
   if (loading) {
     return <div>Loading...</div>;
   }
@@ -651,85 +832,220 @@ export default function ManageChapterVerses() {
         </div>
       )}
       
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle>Add New Content</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4">
-            <div className="grid gap-2">
-              <Label>Content Type</Label>
-              <div className="flex gap-4">
-                <div className="flex items-center">
-                  <input
-                    type="radio"
-                    id="verseType"
-                    name="contentType"
-                    value="verse"
-                    checked={contentType === 'verse'}
-                    onChange={() => setContentType('verse')}
-                    className="mr-2"
-                  />
-                  <Label htmlFor="verseType">Verse</Label>
-                </div>
-                <div className="flex items-center">
-                  <input
-                    type="radio"
-                    id="titleType"
-                    name="contentType"
-                    value="title"
-                    checked={contentType === 'title'}
-                    onChange={() => setContentType('title')}
-                    className="mr-2"
-                  />
-                  <Label htmlFor="titleType">Section Title</Label>
+      {/* Two-column layout for forms */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        {/* Left column - Manual verse input */}
+        <Card className="bg-white border border-gray-200">
+          <CardHeader className="bg-white text-black">
+            <CardTitle className="text-black">Add Content Manually</CardTitle>
+          </CardHeader>
+          <CardContent className="bg-white text-black">
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label>Content Type</Label>
+                <div className="flex gap-4">
+                  <div className="flex items-center">
+                    <input
+                      type="radio"
+                      id="verseType"
+                      name="contentType"
+                      value="verse"
+                      checked={contentType === 'verse'}
+                      onChange={() => setContentType('verse')}
+                      className="mr-2"
+                    />
+                    <Label htmlFor="verseType">Verse</Label>
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      type="radio"
+                      id="titleType"
+                      name="contentType"
+                      value="title"
+                      checked={contentType === 'title'}
+                      onChange={() => setContentType('title')}
+                      className="mr-2"
+                    />
+                    <Label htmlFor="titleType">Section Title</Label>
+                  </div>
                 </div>
               </div>
-            </div>
-            
-            {contentType === 'verse' && (
+              
+              {contentType === 'verse' && (
+                <div className="grid gap-2">
+                  <Label htmlFor="verseNumber">Verse Number</Label>
+                  <Input
+                    id="verseNumber"
+                    type="number"
+                    value={newVerse.number || ''}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
+                      setNewVerse(prev => ({ ...prev, number: parseInt(e.target.value) }))
+                    }
+                    placeholder="Enter verse number"
+                  />
+                </div>
+              )}
+              
               <div className="grid gap-2">
-                <Label htmlFor="verseNumber">Verse Number</Label>
-                <Input
-                  id="verseNumber"
-                  type="number"
-                  value={newVerse.number || ''}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
-                    setNewVerse(prev => ({ ...prev, number: parseInt(e.target.value) }))
-                  }
-                  placeholder="Enter verse number"
+                <Label htmlFor="verseContent">
+                  {contentType === 'verse' ? 'Verse Content' : 'Section Title'}
+                </Label>
+                <QuillEditor
+                  key={resetEditor ? 'reset-editor-1' : 'reset-editor-2'}
+                  data={newVerse.text || ''}
+                  onChange={handleEditorChange}
                 />
               </div>
+              
+              <Button 
+                onClick={handleSaveVerse} 
+                className="flex items-center gap-2"
+                disabled={addingVerse || editingVerse}
+              >
+                <Plus className="w-4 h-4" />
+                {isEditing ? 'Update' : 'Add'} {contentType === 'verse' ? 'Verse' : 'Section Title'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Right column - Image upload and processing */}
+        <Card className="bg-white border border-gray-200">
+          <CardHeader className="bg-white text-black">
+            <CardTitle className="text-black">Extract Verses from Image</CardTitle>
+          </CardHeader>
+          <CardContent className="bg-white text-black">
+            {/* API Key configuration form */}
+            {showApiKeyForm && (
+              <GeminiConfigForm 
+                onApiKeySet={handleApiKeySet} 
+                error={geminiError && geminiError.includes('API key') ? geminiError : null}
+              />
             )}
             
-            <div className="grid gap-2">
-              <Label htmlFor="verseContent">
-                {contentType === 'verse' ? 'Verse Content' : 'Section Title'}
-              </Label>
-              <QuillEditor
-                key={resetEditor ? 'reset-editor-1' : 'reset-editor-2'}
-                data={newVerse.text || ''}
-                onChange={handleEditorChange}
-              />
+            <div className="grid gap-6">
+              {/* Image upload area */}
+              <div className="grid gap-2">
+                <Label htmlFor="imageUpload">Upload Image with Bible Verses</Label>
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                  <input
+                    type="file"
+                    id="imageUpload"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                  />
+                  {uploadedImageUrl ? (
+                    <div className="space-y-4">
+                      <div className="relative w-full aspect-video bg-gray-100 rounded-lg overflow-hidden">
+                        <img 
+                          src={uploadedImageUrl} 
+                          alt="Uploaded verses" 
+                          className="w-full h-full object-contain"
+                        />
+                        <button 
+                          onClick={() => {
+                            setUploadedImage(null);
+                            setUploadedImageUrl(null);
+                          }}
+                          className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                      </div>
+                      <Button
+                        onClick={processImage}
+                        className="w-full flex items-center justify-center gap-2"
+                        disabled={processingImage}
+                      >
+                        {processingImage ? (
+                          <>
+                            <div className="loading loading-spinner loading-xs"></div>
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <Image className="w-4 h-4" />
+                            Process Image
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  ) : (
+                    <label htmlFor="imageUpload" className="cursor-pointer">
+                      <div className="flex flex-col items-center justify-center py-4">
+                        <Upload className="w-10 h-10 text-gray-400 mb-2" />
+                        <p className="text-sm font-medium">Click to upload or drag and drop</p>
+                        <p className="text-xs text-gray-500 mt-1">PNG, JPG, WEBP up to 10MB</p>
+                      </div>
+                    </label>
+                  )}
+                </div>
+              </div>
+              
+              {geminiError && (
+                <div className="text-red-500 text-sm p-2 bg-red-50 rounded-md">
+                  {geminiError}
+                </div>
+              )}
+              
+              {/* Extracted verses list */}
+              {extractedVerses.length > 0 && (
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold">Extracted Verses</h3>
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {extractedVerses.map(verse => (
+                      <div key={verse.id} className="border rounded-lg p-3 bg-white">
+                        <div className="flex justify-between">
+                          <span className="font-bold">Verse {verse.verseNumber}</span>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => editExtractedVerse(verse)}
+                              className="text-blue-500 hover:text-blue-700 h-6 w-6"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
+                                <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+                                <path d="m15 5 4 4"/>
+                              </svg>
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => deleteExtractedVerse(verse.id)}
+                              className="text-red-500 hover:text-red-700 h-6 w-6"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="mt-1 text-sm">{verse.verseText}</div>
+                        <Button 
+                          className="mt-2 w-full text-xs h-7"
+                          onClick={() => addExtractedVerse(verse)}
+                          disabled={addingVerse}
+                        >
+                          Add to Chapter
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-            
-            <Button 
-              onClick={handleSaveVerse} 
-              className="flex items-center gap-2"
-              disabled={addingVerse || editingVerse}
-            >
-              <Plus className="w-4 h-4" />
-              {isEditing ? 'Update' : 'Add'} {contentType === 'verse' ? 'Verse' : 'Section Title'}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Chapter Content</CardTitle>
+      {/* Chapter content display */}
+      <Card className="bg-white border border-gray-200">
+        <CardHeader className="bg-white text-black">
+          <CardTitle className="text-black">Chapter Content</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="bg-white text-black">
           {loading ? (
             <div className="flex justify-center p-8">
               <div className="loading loading-spinner loading-lg"></div>

@@ -42,11 +42,14 @@ const CustomQuillEditor: React.FC<QuillEditorProps> = ({ data, onChange }) => {
 
   // Update editor value when prop data changes
   useEffect(() => {
-    if (mounted && data !== editorValue) {
+    if (mounted) {
       console.log('Updating editor value from prop data:', data);
-      setEditorValue(data || '');
+      // Force a reset by using a short timeout with increased delay
+      setTimeout(() => {
+        setEditorValue(data || '');
+      }, 100);
     }
-  }, [data, mounted, editorValue]);
+  }, [data, mounted]);
 
   // Handle changes to editor content
   const handleChange = (content: string, delta: any, source: string, editor: any) => {
@@ -129,6 +132,8 @@ const CustomQuillEditor: React.FC<QuillEditorProps> = ({ data, onChange }) => {
           overflow-y: auto;
           font-size: 1rem;
           white-space: pre-wrap;
+          background-color: white;
+          color: black;
         }
 
         /* Custom styling untuk indentasi */
@@ -146,6 +151,7 @@ const CustomQuillEditor: React.FC<QuillEditorProps> = ({ data, onChange }) => {
         .ql-toolbar.ql-snow {
           border-color: var(--border-color, #e2e8f0);
           background-color: var(--toolbar-bg, #f8fafc);
+          color: black;
         }
         
         /* Make buttons more visible */
@@ -155,6 +161,26 @@ const CustomQuillEditor: React.FC<QuillEditorProps> = ({ data, onChange }) => {
           display: inline-flex;
           align-items: center;
           justify-content: center;
+          color: #333;
+          fill: #333;
+        }
+
+        /* Force Quill to use light theme colors */
+        .ql-snow .ql-stroke {
+          stroke: #444;
+        }
+        
+        .ql-snow .ql-fill {
+          fill: #444;
+        }
+        
+        .ql-snow .ql-picker {
+          color: #444;
+        }
+        
+        .ql-snow .ql-picker-options {
+          background-color: white;
+          color: black;
         }
 
         /* Styling untuk tombol indent/outdent */
@@ -167,6 +193,7 @@ const CustomQuillEditor: React.FC<QuillEditorProps> = ({ data, onChange }) => {
         .quill {
           display: flex;
           flex-direction: column;
+          background-color: white;
         }
       `}</style>
     </div>
