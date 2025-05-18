@@ -32,6 +32,12 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   
+  // Konfigurasi environment variables
+  env: {
+    // Fallback value untuk Gemini API key bila variabel lingkungan tidak tersedia
+    NEXT_PUBLIC_GEMINI_API_KEY: process.env.NEXT_PUBLIC_GEMINI_API_KEY,
+  },
+  
   webpack: (config, { isServer }) => {
     // Handle Node.js modules in the browser
     if (!isServer) {

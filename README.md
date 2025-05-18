@@ -12,6 +12,7 @@ Bible PPT Generator adalah aplikasi web yang memungkinkan Anda membuat presentas
 - **Export PPT**: Ekspor presentasi langsung ke format PowerPoint (.pptx)
 - **Custom Styling**: Kustomisasi tampilan slide sesuai kebutuhan
 - **Responsive Design**: Antarmuka yang responsif untuk berbagai ukuran layar
+- **Ekstraksi Ayat dari Gambar**: Fitur ekstraksi ayat menggunakan Google Gemini API
 
 ## 🚀 Memulai
 
@@ -27,14 +28,29 @@ npm install
 yarn install
 ```
 
-3. Jalankan server development:
+3. Buat file `.env.local` di root project dan tambahkan variabel lingkungan berikut:
+```
+# Google Gemini API Key untuk fitur ekstraksi ayat dari gambar
+NEXT_PUBLIC_GEMINI_API_KEY=YOUR_GEMINI_API_KEY
+
+# Firebase Configuration (Client side)
+NEXT_PUBLIC_FIREBASE_API_KEY=YOUR_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project-id.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project-id.appspot.com
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-messaging-sender-id
+NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id
+NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=your-measurement-id
+```
+
+4. Jalankan server development:
 ```bash
 npm run dev
 # atau
 yarn dev
 ```
 
-4. Buka [http://localhost:3000](http://localhost:3000) di browser Anda
+5. Buka [http://localhost:3000](http://localhost:3000) di browser Anda
 
 ## 💡 Cara Penggunaan
 

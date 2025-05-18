@@ -320,13 +320,9 @@ export default function ManageChapterVerses() {
     fetchChapter();
   }, [id, bookId, chapterId]);
 
-  // Initialize API key from localStorage on client side
+  // Initialize API key from environment variable only
   useEffect(() => {
-    const savedKey = localStorage.getItem('gemini_api_key');
-    if (savedKey) {
-      setGeminiApiKey(savedKey);
-      setShowApiKeyForm(false);
-    } else if (GEMINI_API_KEY) {
+    if (GEMINI_API_KEY) {
       setGeminiApiKey(GEMINI_API_KEY);
       setShowApiKeyForm(false);
     } else {
@@ -683,11 +679,16 @@ export default function ManageChapterVerses() {
     setUploadedImageUrl(imageUrl);
   };
 
-  // Handle API key update
+  // Handle API key update - only accept from environment variable
   const handleApiKeySet = (key: string) => {
-    setGeminiApiKey(key);
-    setShowApiKeyForm(false);
-    setGeminiError(null);
+    // Hanya terima API key dari environment variable
+    if (key === GEMINI_API_KEY && GEMINI_API_KEY) {
+      setGeminiApiKey(key);
+      setShowApiKeyForm(false);
+      setGeminiError(null);
+    } else {
+      setGeminiError('API key hanya bisa diatur melalui variabel lingkungan NEXT_PUBLIC_GEMINI_API_KEY');
+    }
   };
   
   // Process image with Gemini API

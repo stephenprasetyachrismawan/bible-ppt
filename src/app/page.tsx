@@ -26,6 +26,10 @@ import documentExists from '@/firebase/firestore/documentExists';
 import testFirestoreConnection from '@/firebase/firestore/testConnection';
 import addData from '@/firebase/firestore/addData';
 
+// Tambahkan import untuk komponen Modal dan FloatingButton
+import Modal from '@/components/Modal';
+import FloatingButton from '@/components/FloatingButton';
+
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -43,7 +47,11 @@ export default function Home() {
     textColor: '#000000',
     fontSize: 24,
     maxCharsPerSlide: 200,
-    font: 'Arial'
+    font: 'Arial',
+    fontWeight: 'normal',
+    borderColor: 'transparent',
+    borderWidth: 0,
+    hasBorder: false
   });
   
   // Subtitle options
@@ -53,12 +61,20 @@ export default function Home() {
     fontSize: number;
     background: string;
     textColor: string;
+    fontWeight: string;
+    borderColor: string;
+    borderWidth: number;
+    hasBorder: boolean;
   }>({
     maxChars: 150,
     font: 'Arial',
     fontSize: 28,
     background: '#000000',
-    textColor: '#FFFFFF'
+    textColor: '#FFFFFF',
+    fontWeight: 'normal',
+    borderColor: '#FFFFFF',
+    borderWidth: 0,
+    hasBorder: false
   });
   
   // State for books, chapters, and verses
@@ -102,9 +118,42 @@ export default function Home() {
   const [showPptTextColorPicker, setShowPptTextColorPicker] = useState(false);
   const [showSubtitleBgColorPicker, setShowSubtitleBgColorPicker] = useState(false);
   const [showSubtitleTextColorPicker, setShowSubtitleTextColorPicker] = useState(false);
+  const [showBorderColorPicker, setShowBorderColorPicker] = useState(false);
+  const [showSubtitleBorderColorPicker, setShowSubtitleBorderColorPicker] = useState(false);
+  
+  // Tambahkan state untuk color picker tengah layar
+  const [centralColorPicker, setCentralColorPicker] = useState<{
+    show: boolean;
+    color: string;
+    onChange: (color: string) => void;
+  }>({
+    show: false,
+    color: '#000000',
+    onChange: () => {}
+  });
+  
+  // Fungsi untuk membuka color picker di tengah layar
+  const openCentralColorPicker = (color: string, onChange: (color: string) => void) => {
+    setCentralColorPicker({
+      show: true,
+      color,
+      onChange
+    });
+  };
+  
+  // Fungsi untuk menutup color picker
+  const closeCentralColorPicker = () => {
+    setCentralColorPicker(prev => ({...prev, show: false}));
+  };
   
   // New tab state
   const [selectedTab, setSelectedTab] = useState<'presentation' | 'subtitle'>('subtitle');
+  
+  // Tambahkan state untuk modal dan floating button
+  const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'options' | 'verse'>('verse');
   
   // Fetch Bible versions on component mount
   useEffect(() => {
@@ -955,26 +1004,21 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
-      {/* Header */}
-      <header className="bg-primary text-primary-content shadow-md">
-        <div className="container mx-auto py-4 px-4 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold">Bible PPT Generator</h1>
-            <p className="text-sm opacity-90">Pencarian Ayat Alkitab</p>
-          </div>
-          <div className="flex gap-2">
-            <Link href="/signin" className="btn btn-sm btn-ghost">Masuk</Link>
-            <Link href="/signup" className="btn btn-sm btn-outline">Daftar</Link>
-          </div>
-        </div>
-      </header>
-
+    <div className="relative">
+      {/* Header sudah tidak diperlukan karena kita sudah memiliki Navbar */}
+      
       {/* Search Section with Dropdowns */}
       <section className="py-8 px-4">
         <div className="container mx-auto max-w-6xl">
-          <div className="bg-white rounded-xl shadow-xl p-6">
-            <h2 className="text-3xl font-bold mb-6 text-center text-primary">Cari Ayat Alkitab</h2>
+          <div className="bg-white rounded-xl shadow-xl p-6 backdrop-blur-sm bg-white/90" 
+               style={{
+                 boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.1)',
+                 borderRadius: '16px',
+                 border: '1px solid rgba(255, 255, 255, 0.3)'
+               }}>
+            <h2 className="text-3xl font-bold mb-6 text-center bg-gradient-to-r from-indigo-500 to-purple-600 text-transparent bg-clip-text">
+              Bible PPT Generator
+            </h2>
             
             {/* Error and connection status */}
             {error && (
@@ -1003,6 +1047,7 @@ export default function Home() {
               </div>
             )}
             
+            {/* Connection status display */}
             {connectionStatus.message && (
               <div className={`alert ${connectionStatus.success ? 'alert-success' : 'alert-warning'} mb-6`}>
                 <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
@@ -1201,9 +1246,9 @@ export default function Home() {
                 </div>
                 
                 <div className="grid-container" style={{ height: "calc(100vh - 400px)", minHeight: "500px" }}>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 h-full">
+                  <div className="grid grid-cols-1 md:grid-cols-1 gap-4 h-full">
                     {/* Left column: Verse selection */}
-                    <div className="md:col-span-2 bg-base-100 p-5 rounded-xl shadow-md border border-base-200 flex flex-col h-full">
+                    <div className="bg-base-100 p-5 rounded-xl shadow-md border border-base-200 flex flex-col h-full">
                       <h4 className="text-lg font-semibold mb-3 text-primary">Daftar Ayat</h4>
                       <div className="overflow-y-auto flex-1 pr-2 custom-scrollbar">
                       {searchResults.versesOrder ? (
@@ -1221,14 +1266,15 @@ export default function Home() {
                           return (
                             <div 
                               key={key} 
-                                className={`mb-3 last:mb-0 ${isTitle ? 'font-bold text-purple-600 mt-4 mb-3' : ''} 
-                                  ${isHighlighted ? 'bg-[#faf7c3] p-2 rounded-lg' : ''} 
-                                  flex items-start gap-2 hover:bg-base-200 p-2 rounded-lg transition-colors`}
+                              className={`mb-3 last:mb-0 ${isTitle ? 'font-bold text-purple-600 mt-4 mb-3' : ''} 
+                                ${isHighlighted ? 'bg-[#faf7c3] p-2 rounded-lg' : ''} 
+                                flex items-start gap-2 hover:bg-base-200 p-2 rounded-lg transition-colors
+                                ${selectedVerses.length === 0 ? 'animate-pulse' : ''}`}
                             >
                               <input
                                 type="checkbox"
                                 id={`verse-${key}`}
-                                  className="checkbox checkbox-primary mt-1"
+                                className={`checkbox checkbox-primary mt-1 ${selectedVerses.length === 0 ? 'animate-pulse' : ''}`}
                                 checked={selectedVerses.includes(key)}
                                 onChange={() => handleVerseSelection(key)}
                               />
@@ -1247,11 +1293,12 @@ export default function Home() {
                           
                           return (
                               <div key={verseNum} className={`mb-3 last:mb-0 ${isTitle ? 'font-bold text-purple-600 mt-4 mb-3' : ''} 
-                                hover:bg-base-200 p-2 rounded-lg transition-colors flex items-start gap-2`}>
+                                hover:bg-base-200 p-2 rounded-lg transition-colors flex items-start gap-2
+                                ${selectedVerses.length === 0 ? 'animate-pulse' : ''}`}>
                               <input
                                 type="checkbox"
                                 id={`verse-${verseNum}`}
-                                  className="checkbox checkbox-primary mt-1"
+                                className={`checkbox checkbox-primary mt-1 ${selectedVerses.length === 0 ? 'animate-pulse' : ''}`}
                                 checked={selectedVerses.includes(verseNum)}
                                 onChange={() => handleVerseSelection(verseNum)}
                               />
@@ -1265,665 +1312,6 @@ export default function Home() {
                       )}
                       </div>
                     </div>
-                    
-                    {/* Right column: Presentation options */}
-                    <div className="bg-base-100 p-5 rounded-xl shadow-md border border-base-200 flex flex-col h-full">
-                      {/* Use DaisyUI's built-in tabs component */}
-                      <div role="tablist" className="tabs tabs-boxed mb-4 flex-none">
-                        <input 
-                          type="radio" 
-                          name="options_tab" 
-                          role="tab" 
-                          className="tab" 
-                          aria-label="Opsi Presentasi" 
-                          checked={selectedTab === 'presentation'}
-                          onChange={() => setSelectedTab('presentation')}
-                        />
-                        <div role="tabpanel" className={`tab-content p-2 ${selectedTab !== 'presentation' ? 'hidden' : ''} flex-1 overflow-y-auto`}>
-                          <div className="space-y-4 h-full flex flex-col">
-                        <div className="form-control">
-                          <label className="label">
-                                <span className="label-text font-medium">Ukuran PPT</span>
-                          </label>
-                          <select 
-                            className="select select-bordered w-full" 
-                            value={pptOptions.size}
-                            onChange={(e) => handlePptOptionChange('size', e.target.value)}
-                          >
-                            <option value="16:9">16:9</option>
-                            <option value="4:3">4:3</option>
-                          </select>
-                        </div>
-                        
-                        <div className="form-control">
-                          <label className="label">
-                                <span className="label-text font-medium">Maksimum Karakter per Slide</span>
-                              </label>
-                              <input 
-                                type="number" 
-                                className="input input-bordered w-full" 
-                                value={pptOptions.maxCharsPerSlide || 200}
-                                onChange={(e) => handlePptOptionChange('maxCharsPerSlide', parseInt(e.target.value) || 200)}
-                                min="50"
-                                max="500"
-                                disabled={pptOptions.versesPerSlide > 1}
-                              />
-                              <label className="label">
-                                <span className="label-text-alt text-info">
-                                  {pptOptions.versesPerSlide > 1 
-                                    ? "Pengaturan ini hanya berlaku ketika 'Ayat per Slide' diatur ke 1" 
-                                    : "Teks akan dipenggal per kata, tidak per huruf"}
-                                </span>
-                              </label>
-                            </div>
-                            
-                            <div className="form-control">
-                              <label className="label">
-                                <span className="label-text font-medium">Ayat per Slide</span>
-                          </label>
-                          <select 
-                            className="select select-bordered w-full" 
-                            value={pptOptions.versesPerSlide}
-                            onChange={(e) => handlePptOptionChange('versesPerSlide', parseInt(e.target.value, 10))}
-                          >
-                            {[1, 2, 3, 4, 5].map(num => (
-                              <option key={num} value={num}>{num}</option>
-                            ))}
-                          </select>
-                          <label className="label">
-                            <span className="label-text-alt text-info">Tentukan berapa banyak ayat yang akan ditampilkan per slide</span>
-                          </label>
-                        </div>
-                        
-                        <div className="form-control">
-                          <label className="label">
-                                <span className="label-text font-medium">Font</span>
-                          </label>
-                          <select 
-                            className="select select-bordered w-full" 
-                                value={pptOptions.font || 'Arial'}
-                                onChange={(e) => handlePptOptionChange('font', e.target.value)}
-                              >
-                                <option value="Arial">Arial</option>
-                                <option value="Calibri">Calibri</option>
-                                <option value="Times New Roman">Times New Roman</option>
-                                <option value="Verdana">Verdana</option>
-                                <option value="Tahoma">Tahoma</option>
-                                <option value="Segoe UI">Segoe UI</option>
-                                <option value="Segoe UI Black">Segoe UI Black</option>
-                          </select>
-                        </div>
-                        
-                        <div className="form-control">
-                          <label className="label">
-                                <span className="label-text font-medium">Ukuran Font</span>
-                          </label>
-                              <input 
-                                type="number" 
-                                className="input input-bordered w-full" 
-                                value={pptOptions.fontSize}
-                                onChange={(e) => handlePptOptionChange('fontSize', parseInt(e.target.value) || 24)}
-                                min="10"
-                                max="50"
-                              />
-                              <div className="mt-2">
-                                <input 
-                                  type="range" 
-                                  min="10" 
-                                  max="50" 
-                                  value={pptOptions.fontSize} 
-                                  className="range range-primary" 
-                                  step="1" 
-                                  onChange={(e) => handlePptOptionChange('fontSize', parseInt(e.target.value))}
-                                />
-                                <div className="flex justify-between text-xs px-1">
-                                  <span>10pt</span>
-                                  <span>30pt</span>
-                                  <span>50pt</span>
-                                </div>
-                              </div>
-                            </div>
-                            
-                            <div className="form-control">
-                              <label className="label">
-                                <span className="label-text font-medium">Warna Latar</span>
-                              </label>
-                              <div className="flex flex-col gap-2">
-                                <div className="flex flex-wrap gap-2 mb-2">
-                                  {/* Preset colors */}
-                                  <div 
-                                    className={`h-8 w-8 rounded-lg border border-gray-300 cursor-pointer ${pptOptions.backgroundColor === '#FFFFFF' ? 'ring-2 ring-primary' : ''}`}
-                                    style={{backgroundColor: '#FFFFFF'}}
-                                    onClick={() => handlePptOptionChange('backgroundColor', '#FFFFFF')}
-                                    title="Putih"
-                                  ></div>
-                                  <div 
-                                    className={`h-8 w-8 rounded-lg border border-gray-300 cursor-pointer ${pptOptions.backgroundColor === '#000000' ? 'ring-2 ring-primary' : ''}`}
-                                    style={{backgroundColor: '#000000'}}
-                                    onClick={() => handlePptOptionChange('backgroundColor', '#000000')}
-                                    title="Hitam"
-                                  ></div>
-                                  <div 
-                                    className={`h-8 w-8 rounded-lg border border-gray-300 cursor-pointer ${pptOptions.backgroundColor === '#FF0000' ? 'ring-2 ring-primary' : ''}`}
-                                    style={{backgroundColor: '#FF0000'}}
-                                    onClick={() => handlePptOptionChange('backgroundColor', '#FF0000')}
-                                    title="Merah"
-                                  ></div>
-                                  <div 
-                                    className={`h-8 w-8 rounded-lg border border-gray-300 cursor-pointer ${pptOptions.backgroundColor === '#00B050' ? 'ring-2 ring-primary' : ''}`}
-                                    style={{backgroundColor: '#00B050'}}
-                                    onClick={() => handlePptOptionChange('backgroundColor', '#00B050')}
-                                    title="Hijau"
-                                  ></div>
-                                  <div 
-                                    className={`h-8 w-8 rounded-lg border border-gray-300 cursor-pointer ${pptOptions.backgroundColor === '#0000FF' ? 'ring-2 ring-primary' : ''}`}
-                                    style={{backgroundColor: '#0000FF'}}
-                                    onClick={() => handlePptOptionChange('backgroundColor', '#0000FF')}
-                                    title="Biru"
-                                  ></div>
-                                </div>
-                                
-                                {/* Current color and picker toggle */}
-                                <div className="flex items-center gap-2">
-                                  <div 
-                                    className="h-8 w-8 rounded-lg border border-gray-300 cursor-pointer"
-                                    style={{backgroundColor: pptOptions.backgroundColor}}
-                                    onClick={() => setShowPptBgColorPicker(!showPptBgColorPicker)}
-                                  ></div>
-                                  <div className="flex-1">
-                                    <button 
-                                      type="button" 
-                                      className="btn btn-sm btn-outline w-full"
-                                      onClick={() => setShowPptBgColorPicker(!showPptBgColorPicker)}
-                                    >
-                                      {showPptBgColorPicker ? 'Tutup' : 'Pilih Warna Lain'}
-                                    </button>
-                                  </div>
-                                </div>
-                                
-                                {/* Color picker */}
-                                {showPptBgColorPicker && (
-                                  <div className="mt-2">
-                                    <HexColorPicker 
-                                      color={pptOptions.backgroundColor} 
-                                      onChange={(color) => handlePptOptionChange('backgroundColor', color)} 
-                                    />
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            
-                            <div className="form-control">
-                              <label className="label">
-                                <span className="label-text font-medium">Warna Teks</span>
-                              </label>
-                              <div className="flex flex-col gap-2">
-                                <div className="flex flex-wrap gap-2 mb-2">
-                                  {/* Preset colors */}
-                                  <div 
-                                    className={`h-8 w-8 rounded-lg border border-gray-300 cursor-pointer ${pptOptions.textColor === '#000000' ? 'ring-2 ring-primary' : ''}`}
-                                    style={{backgroundColor: '#000000'}}
-                                    onClick={() => handlePptOptionChange('textColor', '#000000')}
-                                    title="Hitam"
-                                  ></div>
-                                  <div 
-                                    className={`h-8 w-8 rounded-lg border border-gray-300 cursor-pointer ${pptOptions.textColor === '#FFFFFF' ? 'ring-2 ring-primary' : ''}`}
-                                    style={{backgroundColor: '#FFFFFF'}}
-                                    onClick={() => handlePptOptionChange('textColor', '#FFFFFF')}
-                                    title="Putih"
-                                  ></div>
-                                  <div 
-                                    className={`h-8 w-8 rounded-lg border border-gray-300 cursor-pointer ${pptOptions.textColor === '#FFFF00' ? 'ring-2 ring-primary' : ''}`}
-                                    style={{backgroundColor: '#FFFF00'}}
-                                    onClick={() => handlePptOptionChange('textColor', '#FFFF00')}
-                                    title="Kuning"
-                                  ></div>
-                                </div>
-                                
-                                {/* Current color and picker toggle */}
-                                <div className="flex items-center gap-2">
-                                  <div 
-                                    className="h-8 w-8 rounded-lg border border-gray-300 cursor-pointer"
-                                    style={{backgroundColor: pptOptions.textColor}}
-                                    onClick={() => setShowPptTextColorPicker(!showPptTextColorPicker)}
-                                  ></div>
-                                  <div className="flex-1">
-                                    <button 
-                                      type="button" 
-                                      className="btn btn-sm btn-outline w-full"
-                                      onClick={() => setShowPptTextColorPicker(!showPptTextColorPicker)}
-                                    >
-                                      {showPptTextColorPicker ? 'Tutup' : 'Pilih Warna Lain'}
-                                    </button>
-                        </div>
-                      </div>
-                      
-                                {/* Color picker */}
-                                {showPptTextColorPicker && (
-                                  <div className="mt-2">
-                                    <HexColorPicker 
-                                      color={pptOptions.textColor} 
-                                      onChange={(color) => handlePptOptionChange('textColor', color)} 
-                                    />
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            
-                            <button 
-                              className="btn btn-primary w-full mt-4"
-                              onClick={() => generatePowerPoint('presentation')}
-                              disabled={selectedVerses.length === 0 || generatingPpt}
-                            >
-                              {generatingPpt ? (
-                                <>
-                                  <span className="loading loading-spinner loading-md"></span>
-                                  Membuat Presentasi (Teks di Tengah)
-                                </>
-                              ) : (
-                                <div className="flex items-center justify-center gap-2">
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.148 2.148A12.061 12.061 0 0 1 16.5 7.605" />
-                                  </svg>
-                                  <span>Buat Presentasi (Teks di Tengah)</span>
-                                </div>
-                              )}
-                            </button>
-                          </div>
-                        </div>
-
-                        <input 
-                          type="radio" 
-                          name="options_tab" 
-                          role="tab" 
-                          className="tab" 
-                          aria-label="Opsi Subtitle" 
-                          checked={selectedTab === 'subtitle'}
-                          onChange={() => setSelectedTab('subtitle')}
-                        />
-                        <div role="tabpanel" className={`tab-content p-2 ${selectedTab !== 'subtitle' ? 'hidden' : ''} flex-1 overflow-y-auto`}>
-                          <div className="space-y-4 h-full flex flex-col">
-                            <p className="text-sm text-gray-600 mb-3">Subtitle akan menghasilkan file terpisah dengan teks hanya di bagian bawah slide.</p>
-                            
-                        <div className="form-control">
-                          <label className="label">
-                                <span className="label-text font-medium">Maksimum Karakter per Slide</span>
-                          </label>
-                          <input 
-                            type="number" 
-                            className="input input-bordered w-full" 
-                                value={subtitleOptions.maxChars}
-                                onChange={(e) => handleSubtitleOptionChange('maxChars', parseInt(e.target.value) || 150)}
-                            min="10"
-                            max="500"
-                          />
-                          <label className="label">
-                            <span className="label-text-alt text-info">Teks akan dipenggal per kata, tidak per huruf</span>
-                          </label>
-                        </div>
-                        
-                        <div className="form-control">
-                          <label className="label">
-                                <span className="label-text font-medium">Warna Latar</span>
-                          </label>
-                              <div className="flex flex-col gap-2">
-                                <div className="flex flex-wrap gap-2 mb-2">
-                                  {/* Preset colors */}
-                                  <div 
-                                    className={`h-8 w-8 rounded-lg border border-gray-300 cursor-pointer ${subtitleOptions.background === '#000000' ? 'ring-2 ring-primary' : ''}`}
-                                    style={{backgroundColor: '#000000'}}
-                                    onClick={() => handleSubtitleOptionChange('background', '#000000')}
-                                    title="Hitam"
-                                  ></div>
-                                  <div 
-                                    className={`h-8 w-8 rounded-lg border border-gray-300 cursor-pointer ${subtitleOptions.background === '#FFFFFF' ? 'ring-2 ring-primary' : ''}`}
-                                    style={{backgroundColor: '#FFFFFF'}}
-                                    onClick={() => handleSubtitleOptionChange('background', '#FFFFFF')}
-                                    title="Putih"
-                                  ></div>
-                                  <div 
-                                    className={`h-8 w-8 rounded-lg border border-gray-300 cursor-pointer ${subtitleOptions.background === '#FF0000' ? 'ring-2 ring-primary' : ''}`}
-                                    style={{backgroundColor: '#FF0000'}}
-                                    onClick={() => handleSubtitleOptionChange('background', '#FF0000')}
-                                    title="Merah"
-                                  ></div>
-                                  <div 
-                                    className={`h-8 w-8 rounded-lg border border-gray-300 cursor-pointer ${subtitleOptions.background === '#00B050' ? 'ring-2 ring-primary' : ''}`}
-                                    style={{backgroundColor: '#00B050'}}
-                                    onClick={() => handleSubtitleOptionChange('background', '#00B050')}
-                                    title="Hijau"
-                                  ></div>
-                                  <div 
-                                    className={`h-8 w-8 rounded-lg border border-gray-300 cursor-pointer ${subtitleOptions.background === '#0000FF' ? 'ring-2 ring-primary' : ''}`}
-                                    style={{backgroundColor: '#0000FF'}}
-                                    onClick={() => handleSubtitleOptionChange('background', '#0000FF')}
-                                    title="Biru"
-                                  ></div>
-                                </div>
-                                
-                                {/* Current color and picker toggle */}
-                                <div className="flex items-center gap-2">
-                                  <div 
-                                    className="h-8 w-8 rounded-lg border border-gray-300 cursor-pointer"
-                                    style={{backgroundColor: subtitleOptions.background}}
-                                    onClick={() => setShowSubtitleBgColorPicker(!showSubtitleBgColorPicker)}
-                                  ></div>
-                                  <div className="flex-1">
-                                    <button 
-                                      type="button" 
-                                      className="btn btn-sm btn-outline w-full"
-                                      onClick={() => setShowSubtitleBgColorPicker(!showSubtitleBgColorPicker)}
-                                    >
-                                      {showSubtitleBgColorPicker ? 'Tutup' : 'Pilih Warna Lain'}
-                                    </button>
-                                  </div>
-                                </div>
-                                
-                                {/* Color picker */}
-                                {showSubtitleBgColorPicker && (
-                                  <div className="mt-2">
-                                    <HexColorPicker 
-                                      color={subtitleOptions.background} 
-                                      onChange={(color) => handleSubtitleOptionChange('background', color)} 
-                                    />
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            
-                            <div className="form-control">
-                              <label className="label">
-                                <span className="label-text font-medium">Warna Teks</span>
-                              </label>
-                              <div className="flex flex-col gap-2">
-                                <div className="flex flex-wrap gap-2 mb-2">
-                                  {/* Preset colors */}
-                                  <div 
-                                    className={`h-8 w-8 rounded-lg border border-gray-300 cursor-pointer ${subtitleOptions.textColor === '#FFFFFF' ? 'ring-2 ring-primary' : ''}`}
-                                    style={{backgroundColor: '#FFFFFF'}}
-                                    onClick={() => handleSubtitleOptionChange('textColor', '#FFFFFF')}
-                                    title="Putih"
-                                  ></div>
-                                  <div 
-                                    className={`h-8 w-8 rounded-lg border border-gray-300 cursor-pointer ${subtitleOptions.textColor === '#000000' ? 'ring-2 ring-primary' : ''}`}
-                                    style={{backgroundColor: '#000000'}}
-                                    onClick={() => handleSubtitleOptionChange('textColor', '#000000')}
-                                    title="Hitam"
-                                  ></div>
-                                  <div 
-                                    className={`h-8 w-8 rounded-lg border border-gray-300 cursor-pointer ${subtitleOptions.textColor === '#FFFF00' ? 'ring-2 ring-primary' : ''}`}
-                                    style={{backgroundColor: '#FFFF00'}}
-                                    onClick={() => handleSubtitleOptionChange('textColor', '#FFFF00')}
-                                    title="Kuning"
-                                  ></div>
-                                </div>
-                                
-                                {/* Current color and picker toggle */}
-                                <div className="flex items-center gap-2">
-                                  <div 
-                                    className="h-8 w-8 rounded-lg border border-gray-300 cursor-pointer"
-                                    style={{backgroundColor: subtitleOptions.textColor}}
-                                    onClick={() => setShowSubtitleTextColorPicker(!showSubtitleTextColorPicker)}
-                                  ></div>
-                                  <div className="flex-1">
-                                    <button 
-                                      type="button" 
-                                      className="btn btn-sm btn-outline w-full"
-                                      onClick={() => setShowSubtitleTextColorPicker(!showSubtitleTextColorPicker)}
-                                    >
-                                      {showSubtitleTextColorPicker ? 'Tutup' : 'Pilih Warna Lain'}
-                                    </button>
-                                  </div>
-                                </div>
-                                
-                                {/* Color picker */}
-                                {showSubtitleTextColorPicker && (
-                                  <div className="mt-2">
-                                    <HexColorPicker 
-                                      color={subtitleOptions.textColor} 
-                                      onChange={(color) => handleSubtitleOptionChange('textColor', color)} 
-                                    />
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            
-                            <div className="form-control">
-                              <label className="label">
-                                <span className="label-text font-medium">Font</span>
-                              </label>
-                              <select 
-                                className="select select-bordered w-full" 
-                                value={subtitleOptions.font}
-                                onChange={(e) => handleSubtitleOptionChange('font', e.target.value)}
-                              >
-                                <option value="Arial">Arial</option>
-                                <option value="Calibri">Calibri</option>
-                                <option value="Times New Roman">Times New Roman</option>
-                                <option value="Verdana">Verdana</option>
-                                <option value="Tahoma">Tahoma</option>
-                                <option value="Segoe UI">Segoe UI</option>
-                                <option value="Segoe UI Black">Segoe UI Black</option>
-                              </select>
-                            </div>
-                            
-                            <div className="form-control">
-                              <label className="label">
-                                <span className="label-text font-medium">Ukuran Font</span>
-                              </label>
-                              <input 
-                                type="number" 
-                                className="input input-bordered w-full" 
-                                value={subtitleOptions.fontSize}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleSubtitleOptionChange('fontSize', parseInt(e.target.value) || 28)}
-                                min="10"
-                                max="50"
-                              />
-                              <div className="mt-2">
-                                <input 
-                                  type="range" 
-                                  min="10" 
-                                  max="50" 
-                                  value={subtitleOptions.fontSize} 
-                                  className="range range-primary" 
-                                  step="1" 
-                                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleSubtitleOptionChange('fontSize', parseInt(e.target.value))}
-                                />
-                                <div className="flex justify-between text-xs px-1">
-                                  <span>10pt</span>
-                                  <span>30pt</span>
-                                  <span>50pt</span>
-                                </div>
-                        </div>
-                      </div>
-                      
-                        <button 
-                              className="btn btn-secondary w-full mt-4"
-                          onClick={() => generatePowerPoint('subtitle')}
-                          disabled={selectedVerses.length === 0 || generatingPpt}
-                        >
-                          {generatingPpt ? (
-                            <>
-                                  <span className="loading loading-spinner loading-md"></span>
-                                  Membuat Subtitle (Teks di Bawah)
-                                </>
-                              ) : (
-                                <div className="flex items-center justify-center gap-2">
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="m3.75 7.5 16.5-4.125M12 6.75c-2.708 0-5.363.224-7.948.655C2.999 7.58 2.25 8.507 2.25 9.574v9.176A2.25 2.25 0 0 0 4.5 21h15a2.25 2.25 0 0 0 2.25-2.25V9.574c0-1.067-.75-1.994-1.802-2.169A48.329 48.329 0 0 0 12 6.75Zm-1.683 6.443-.005.005-.006-.005.006-.005.005.005Zm-.005 2.127-.005-.006.005-.005.005.005-.005.005Zm-2.116-.006-.005.006-.006-.006.005-.005.006.005-.005.005Zm-.005-2.116-.006-.005.006-.005.005.005-.005.005ZM9.255 10.5v.008h-.008V10.5h.008Zm3.249 1.88-.007.004-.003-.007.006-.003.004.006Zm-1.38 5.126-.003-.006.006-.006.004.007-.006.003Zm.007-6.501-.003.006-.007-.003.004-.007.006.004Zm1.37 5.129-.007-.004.004-.006.006.003-.004.007Zm.504-1.877h-.008v-.007h.008v.007ZM9.255 18v.008h-.008V18h.008Zm-3.246-1.87-.007.004L6 16.127l.006-.003.004.006Zm1.366-5.119-.004-.006.006-.004.004.007-.006.003ZM7.38 17.5l-.003.006-.007-.003.004-.007.006.004Zm-1.376-5.116L6 12.38l.003-.007.007.004-.004.007Zm-.5 1.873h-.008v-.007h.008v.007ZM17.25 12.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5Zm0 4.5a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5Z" />
-                                  </svg>
-                                  <span>Buat Subtitle (Teks di Bawah)</span>
-                                </div>
-                              )}
-                        </button>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {/* Preview section */}
-                      {selectedVerses.length > 0 && (
-                        <div className="mt-6 pt-4 border-t border-base-200 flex-none">
-                          <div className="tabs tabs-boxed mb-3">
-                            <button className="tab tab-active">Preview</button>
-                          </div>
-                          
-                          {/* Show Presentation preview only when presentation tab is active */}
-                          {selectedTab === 'presentation' && (
-                            <div>
-                              <h5 className="font-medium mb-2">Preview Presentasi</h5>
-                              <div 
-                                className="w-full rounded-lg overflow-hidden flex flex-col shadow-md"
-                            style={{ 
-                              backgroundColor: pptOptions.backgroundColor,
-                                  aspectRatio: pptOptions.size === '16:9' ? '16/9' : '4/3',
-                                  padding: '16px',
-                                  color: pptOptions.textColor,
-                                  position: 'relative',
-                                  minHeight: '220px'
-                                }}
-                              >
-                                {/* Presentation Title */}
-                                <div 
-                                  className="font-bold text-center"
-                                  style={{
-                                    fontSize: `${(parseInt(pptOptions.fontSize.toString()) + 4) / 3}px`,
-                                    fontFamily: pptOptions.font,
-                                    marginTop: '5%',
-                                    marginBottom: '10%'
-                                  }}
-                                >
-                                  {searchResults.book} {searchResults.chapter}
-                                </div>
-
-                                {/* Presentation Content */}
-                                <div 
-                                  className="text-center flex-1 flex flex-col justify-center"
-                                  style={{
-                                    fontSize: `${parseInt(pptOptions.fontSize.toString()) / 3}px`,
-                                    fontFamily: pptOptions.font,
-                                    paddingBottom: '15%'
-                                  }}
-                                >
-                                  {(() => {
-                                    // If using versesPerSlide = 1 and maxCharsPerSlide, demonstrate character limit
-                                    if (parseInt(pptOptions.versesPerSlide.toString()) === 1 && pptOptions.maxCharsPerSlide) {
-                                      // Get content for preview
-                                      let combinedText = '';
-                                      let currentCharCount = 0;
-                                      const versesToShow = [];
-                                      
-                                      for (const verseKey of selectedVerses) {
-                                        const verseText = stripHtmlTags(searchResults.verses[verseKey]);
-                                        const displayText = verseKey.startsWith('title-') ? 
-                                          verseText : 
-                                          `${verseKey}. ${verseText}`;
-                                        
-                                        if (currentCharCount + displayText.length > pptOptions.maxCharsPerSlide) {
-                                          break;
-                                        }
-                                        
-                                        versesToShow.push(verseKey);
-                                        currentCharCount += displayText.length;
-                                      }
-                                      
-                                      return versesToShow.map(key => (
-                                        <div key={`preview-char-${key}`} className="mb-2">
-                                  {key.startsWith('title-') ? (
-                                    <span className="italic">{stripHtmlTags(searchResults.verses[key])}</span>
-                                  ) : (
-                                    <span>{key}. {stripHtmlTags(searchResults.verses[key])}</span>
-                                  )}
-                                </div>
-                                      ));
-                                    } else {
-                                      // Traditional verse count approach
-                                      return selectedVerses
-                                        .slice(0, parseInt(pptOptions.versesPerSlide.toString()))
-                                        .map(key => (
-                                          <div key={`preview-${key}`} className="mb-2">
-                                            {key.startsWith('title-') ? (
-                                              <span className="italic">{stripHtmlTags(searchResults.verses[key])}</span>
-                                            ) : (
-                                              <span>{key}. {stripHtmlTags(searchResults.verses[key])}</span>
-                                            )}
-                          </div>
-                                        ));
-                                    }
-                                  })()}
-                          </div>
-                              </div>
-                            </div>
-                          )}
-                          
-                          {/* Show Subtitle preview only when subtitle tab is active */}
-                          {selectedTab === 'subtitle' && (
-                            <div>
-                              <h5 className="font-medium mb-2">Preview Subtitle</h5>
-                          <div 
-                                className="w-full rounded-lg overflow-hidden relative shadow-md"
-                            style={{ 
-                                  backgroundColor: subtitleOptions.background,
-                              aspectRatio: '16/9'
-                            }}
-                          >
-                            <div 
-                                  className="absolute text-center px-4 w-full"
-                              style={{
-                                    fontSize: `${parseInt(subtitleOptions.fontSize.toString()) / 3}px`,
-                                    fontFamily: subtitleOptions.font,
-                                    color: subtitleOptions.textColor,
-                                    bottom: '10%',
-                                    height: '25%',
-                                    left: 0,
-                                    right: 0,
-                                    display: 'flex',
-                                    justifyContent: 'center',
-                                    alignItems: 'center'
-                              }}
-                            >
-                              {(() => {
-                                // Get first verse only for preview
-                                if (selectedVerses.length === 0) return '';
-                                
-                                const firstVerseKey = selectedVerses[0];
-                                // Add verse reference if it's not a title
-                                const verseReference = !firstVerseKey.startsWith('title-') ? 
-                                  `${searchResults.chapter}:${firstVerseKey} ` : '';
-                                
-                                const previewVerseText = stripHtmlTags(searchResults.verses[firstVerseKey]);
-                                const completeText = verseReference + previewVerseText;
-                                
-                                // Split into words
-                                const words = completeText.trim().split(/\s+/);
-                                    const maxChars = subtitleOptions.maxChars;
-                                
-                                // Add words until we reach the character limit
-                                let previewText = '';
-                                let charCount = 0;
-                                
-                                for (const word of words) {
-                                  if (charCount + word.length + (previewText ? 1 : 0) > maxChars) {
-                                    break;
-                                  }
-                                  
-                                  if (previewText === '') {
-                                    previewText = word;
-                                  } else {
-                                    previewText += ' ' + word;
-                                  }
-                                  
-                                  charCount += word.length + (previewText === word ? 0 : 1);
-                                }
-                                
-                                return previewText;
-                              })()}
-                            </div>
-                          </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
                   </div>
                 </div>
               </div>
@@ -1932,13 +1320,552 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="footer footer-center p-6 bg-primary text-primary-content mt-auto">
-        <div>
-          <p className="font-bold">Bible PPT Generator</p>
-          <p>© {new Date().getFullYear()} - Semua Hak Dilindungi</p>
+      {/* Floating Button untuk opsi PPT */}
+      <FloatingButton 
+        onClick={() => setShowOptionsModal(true)}
+        icon="download"
+        tooltip="Konfigurasi & Download PPT"
+        position="bottom-right"
+        color="primary"
+        className={selectedVerses.length > 0 ? 'animate-pulse-color' : ''}
+      />
+
+      {/* Modal untuk opsi PPT */}
+      <Modal
+        isOpen={showOptionsModal}
+        onClose={() => setShowOptionsModal(false)}
+        title="Konfigurasi PowerPoint"
+        size="lg"
+      >
+        <div className="flex mb-4 border-b border-gray-200">
+          <button
+            className={`flex-1 py-2 px-4 text-center ${selectedTab === 'presentation' ? 'border-b-2 border-indigo-500 text-indigo-700 font-medium' : 'text-gray-500'}`}
+            onClick={() => setSelectedTab('presentation')}
+          >
+            Presentasi
+          </button>
+          <button
+            className={`flex-1 py-2 px-4 text-center ${selectedTab === 'subtitle' ? 'border-b-2 border-indigo-500 text-indigo-700 font-medium' : 'text-gray-500'}`}
+            onClick={() => setSelectedTab('subtitle')}
+          >
+            Subtitle
+          </button>
         </div>
-      </footer>
+        
+        {selectedTab === 'presentation' && (
+          <div className="space-y-4">
+            {/* Ukuran Slide */}
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text font-medium">Ukuran Slide</span>
+              </label>
+              <select 
+                className="select select-bordered w-full" 
+                value={pptOptions.size}
+                onChange={(e) => handlePptOptionChange('size', e.target.value)}
+              >
+                <option value="16:9">Widescreen (16:9)</option>
+                <option value="4:3">Standar (4:3)</option>
+              </select>
+            </div>
+            
+            {/* Ayat per Slide */}
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text font-medium">Ayat per Slide</span>
+              </label>
+              <select 
+                className="select select-bordered w-full" 
+                value={pptOptions.versesPerSlide}
+                onChange={(e) => handlePptOptionChange('versesPerSlide', parseInt(e.target.value))}
+              >
+                <option value="1">1 ayat per slide</option>
+                <option value="2">2 ayat per slide</option>
+                <option value="3">3 ayat per slide</option>
+                <option value="4">4 ayat per slide</option>
+                <option value="5">5 ayat per slide</option>
+              </select>
+            </div>
+            
+            {/* Font */}
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text font-medium">Font</span>
+              </label>
+              <select 
+                className="select select-bordered w-full" 
+                value={pptOptions.font}
+                onChange={(e) => handlePptOptionChange('font', e.target.value)}
+              >
+                <option value="Arial">Arial</option>
+                <option value="Calibri">Calibri</option>
+                <option value="Times New Roman">Times New Roman</option>
+                <option value="Verdana">Verdana</option>
+                <option value="Georgia">Georgia</option>
+                <option value="Tahoma">Tahoma</option>
+                <option value="Helvetica">Helvetica</option>
+                <option value="Trebuchet MS">Trebuchet MS</option>
+                <option value="Century Gothic">Century Gothic</option>
+                <option value="Garamond">Garamond</option>
+                <option value="Bookman">Bookman</option>
+                <option value="Impact">Impact</option>
+                <option value="Comic Sans MS">Comic Sans MS</option>
+                <option value="Palatino">Palatino</option>
+                <option value="Courier New">Courier New</option>
+                <option value="Lucida Sans">Lucida Sans</option>
+                <option value="Lucida Console">Lucida Console</option>
+              </select>
+            </div>
+            
+            {/* Font Weight */}
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text font-medium">Ketebalan Font</span>
+              </label>
+              <select 
+                className="select select-bordered w-full" 
+                value={pptOptions.fontWeight}
+                onChange={(e) => handlePptOptionChange('fontWeight', e.target.value)}
+              >
+                <option value="normal">Normal</option>
+                <option value="bold">Bold</option>
+              </select>
+            </div>
+            
+            {/* Font Size */}
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text font-medium">Ukuran Font</span>
+              </label>
+              <input 
+                type="range" 
+                min="12" 
+                max="72" 
+                value={pptOptions.fontSize} 
+                className="range range-primary w-full" 
+                step="2" 
+                onChange={(e) => handlePptOptionChange('fontSize', parseInt(e.target.value))}
+              />
+              <div className="w-full flex justify-between text-xs px-0 mt-1">
+                <span>12</span>
+                <span>24</span>
+                <span>36</span>
+                <span>48</span>
+                <span>60</span>
+                <span>72</span>
+              </div>
+              <div className="text-center mt-1">
+                <span className="text-sm badge">{pptOptions.fontSize}pt</span>
+              </div>
+            </div>
+            
+            {/* Background Color */}
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text font-medium">Warna Latar</span>
+              </label>
+              <div className="flex gap-2">
+                <div 
+                  className="h-10 w-10 rounded-md border cursor-pointer"
+                  style={{ backgroundColor: pptOptions.backgroundColor }}
+                  onClick={() => openCentralColorPicker(pptOptions.backgroundColor, color => handlePptOptionChange('backgroundColor', color))}
+                ></div>
+                <input 
+                  type="text" 
+                  value={pptOptions.backgroundColor} 
+                  onChange={(e) => handlePptOptionChange('backgroundColor', e.target.value)}
+                  className="input input-bordered flex-1" 
+                />
+              </div>
+            </div>
+            
+            {/* Text Color */}
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text font-medium">Warna Teks</span>
+              </label>
+              <div className="flex gap-2">
+                <div 
+                  className="h-10 w-10 rounded-md border cursor-pointer"
+                  style={{ backgroundColor: pptOptions.textColor }}
+                  onClick={() => openCentralColorPicker(pptOptions.textColor, color => handlePptOptionChange('textColor', color))}
+                ></div>
+                <input 
+                  type="text" 
+                  value={pptOptions.textColor} 
+                  onChange={(e) => handlePptOptionChange('textColor', e.target.value)}
+                  className="input input-bordered flex-1" 
+                />
+              </div>
+            </div>
+            
+            {/* Border Options */}
+            <div className="form-control">
+              <label className="label cursor-pointer">
+                <span className="label-text font-medium">Gunakan Border</span>
+                <input 
+                  type="checkbox" 
+                  className="checkbox checkbox-primary" 
+                  checked={pptOptions.hasBorder}
+                  onChange={(e) => handlePptOptionChange('hasBorder', e.target.checked)}
+                />
+              </label>
+            </div>
+            
+            {pptOptions.hasBorder && (
+              <>
+                {/* Border Color */}
+                <div className="form-control">
+                  <label className="label">
+                    <span className="label-text font-medium">Warna Border</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <div 
+                      className="h-10 w-10 rounded-md border cursor-pointer"
+                      style={{ backgroundColor: pptOptions.borderColor }}
+                      onClick={() => openCentralColorPicker(pptOptions.borderColor, color => handlePptOptionChange('borderColor', color))}
+                    ></div>
+                    <input 
+                      type="text" 
+                      value={pptOptions.borderColor} 
+                      onChange={(e) => handlePptOptionChange('borderColor', e.target.value)}
+                      className="input input-bordered flex-1" 
+                    />
+                  </div>
+                </div>
+                
+                {/* Border Width */}
+                <div className="form-control">
+                  <label className="label">
+                    <span className="label-text font-medium">Ketebalan Border</span>
+                  </label>
+                  <input 
+                    type="range" 
+                    min="1" 
+                    max="10" 
+                    value={pptOptions.borderWidth} 
+                    className="range range-primary w-full" 
+                    step="1" 
+                    onChange={(e) => handlePptOptionChange('borderWidth', parseInt(e.target.value))}
+                  />
+                  <div className="w-full flex justify-between text-xs px-0 mt-1">
+                    <span>1</span>
+                    <span>2</span>
+                    <span>4</span>
+                    <span>6</span>
+                    <span>8</span>
+                    <span>10</span>
+                  </div>
+                  <div className="text-center mt-1">
+                    <span className="text-sm badge">{pptOptions.borderWidth}px</span>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+        
+        {selectedTab === 'subtitle' && (
+          <div className="space-y-4">
+            {/* Maksimum Karakter per Slide */}
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text font-medium">Maksimum Karakter per Slide</span>
+              </label>
+              <input 
+                type="number" 
+                className="input input-bordered w-full" 
+                value={subtitleOptions.maxChars}
+                onChange={(e) => handleSubtitleOptionChange('maxChars', parseInt(e.target.value) || 150)}
+                min="10"
+                max="500"
+              />
+              <div className="mt-2">
+                <input 
+                  type="range" 
+                  min="10" 
+                  max="500" 
+                  value={subtitleOptions.maxChars} 
+                  className="range range-primary w-full" 
+                  step="10" 
+                  onChange={(e) => handleSubtitleOptionChange('maxChars', parseInt(e.target.value))}
+                />
+                <div className="w-full flex justify-between text-xs px-0 mt-1">
+                  <span>10</span>
+                  <span>150</span>
+                  <span>300</span>
+                  <span>500</span>
+                </div>
+              </div>
+              <label className="label">
+                <span className="label-text-alt text-info">Teks akan dipenggal per kata, tidak per huruf</span>
+              </label>
+            </div>
+            
+            {/* Font */}
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text font-medium">Font</span>
+              </label>
+              <select 
+                className="select select-bordered w-full" 
+                value={subtitleOptions.font}
+                onChange={(e) => handleSubtitleOptionChange('font', e.target.value)}
+              >
+                <option value="Arial">Arial</option>
+                <option value="Calibri">Calibri</option>
+                <option value="Times New Roman">Times New Roman</option>
+                <option value="Verdana">Verdana</option>
+                <option value="Tahoma">Tahoma</option>
+                <option value="Segoe UI">Segoe UI</option>
+                <option value="Segoe UI Black">Segoe UI Black</option>
+                <option value="Helvetica">Helvetica</option>
+                <option value="Georgia">Georgia</option>
+                <option value="Comic Sans MS">Comic Sans MS</option>
+                <option value="Courier New">Courier New</option>
+                <option value="Arial Black">Arial Black</option>
+                <option value="Impact">Impact</option>
+                <option value="Lucida Sans">Lucida Sans</option>
+                <option value="Trebuchet MS">Trebuchet MS</option>
+                <option value="Garamond">Garamond</option>
+                <option value="Book Antiqua">Book Antiqua</option>
+                <option value="Palatino Linotype">Palatino Linotype</option>
+              </select>
+            </div>
+            
+            {/* Font Size */}
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text font-medium">Ukuran Font</span>
+              </label>
+              <input 
+                type="number" 
+                className="input input-bordered w-full" 
+                value={subtitleOptions.fontSize}
+                onChange={(e) => handleSubtitleOptionChange('fontSize', parseInt(e.target.value) || 28)}
+                min="10"
+                max="50"
+              />
+              <div className="mt-2">
+                <input 
+                  type="range" 
+                  min="10" 
+                  max="50" 
+                  value={subtitleOptions.fontSize} 
+                  className="range range-primary w-full" 
+                  step="2" 
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleSubtitleOptionChange('fontSize', parseInt(e.target.value))}
+                />
+                <div className="w-full flex justify-between text-xs px-0 mt-1">
+                  <span>10pt</span>
+                  <span>30pt</span>
+                  <span>50pt</span>
+                </div>
+              </div>
+            </div>
+            
+            {/* Font Weight */}
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text font-medium">Ketebalan Font</span>
+              </label>
+              <select 
+                className="select select-bordered w-full" 
+                value={subtitleOptions.fontWeight}
+                onChange={(e) => handleSubtitleOptionChange('fontWeight', e.target.value)}
+              >
+                <option value="normal">Normal</option>
+                <option value="bold">Bold</option>
+                <option value="bolder">Bolder</option>
+                <option value="lighter">Lighter</option>
+              </select>
+            </div>
+            
+            {/* Background Color */}
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text font-medium">Warna Latar</span>
+              </label>
+              <div className="flex gap-2">
+                <div 
+                  className="h-10 w-10 rounded-md border cursor-pointer"
+                  style={{ backgroundColor: subtitleOptions.background }}
+                  onClick={() => openCentralColorPicker(subtitleOptions.background, color => handleSubtitleOptionChange('background', color))}
+                ></div>
+                <input 
+                  type="text" 
+                  value={subtitleOptions.background} 
+                  onChange={(e) => handleSubtitleOptionChange('background', e.target.value)}
+                  className="input input-bordered flex-1" 
+                />
+              </div>
+            </div>
+            
+            {/* Text Color */}
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text font-medium">Warna Teks</span>
+              </label>
+              <div className="flex gap-2">
+                <div 
+                  className="h-10 w-10 rounded-md border cursor-pointer"
+                  style={{ backgroundColor: subtitleOptions.textColor }}
+                  onClick={() => openCentralColorPicker(subtitleOptions.textColor, color => handleSubtitleOptionChange('textColor', color))}
+                ></div>
+                <input 
+                  type="text" 
+                  value={subtitleOptions.textColor} 
+                  onChange={(e) => handleSubtitleOptionChange('textColor', e.target.value)}
+                  className="input input-bordered flex-1" 
+                />
+              </div>
+            </div>
+            
+            {/* Border Options */}
+            <div className="form-control">
+              <label className="label cursor-pointer">
+                <span className="label-text font-medium">Gunakan Border</span>
+                <input 
+                  type="checkbox" 
+                  className="checkbox checkbox-primary" 
+                  checked={subtitleOptions.hasBorder}
+                  onChange={(e) => handleSubtitleOptionChange('hasBorder', e.target.checked)}
+                />
+              </label>
+            </div>
+            
+            {subtitleOptions.hasBorder && (
+              <>
+                {/* Border Color */}
+                <div className="form-control">
+                  <label className="label">
+                    <span className="label-text font-medium">Warna Border</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <div 
+                      className="h-10 w-10 rounded-md border cursor-pointer"
+                      style={{ backgroundColor: subtitleOptions.borderColor }}
+                      onClick={() => openCentralColorPicker(subtitleOptions.borderColor, color => handleSubtitleOptionChange('borderColor', color))}
+                    ></div>
+                    <input 
+                      type="text" 
+                      value={subtitleOptions.borderColor} 
+                      onChange={(e) => handleSubtitleOptionChange('borderColor', e.target.value)}
+                      className="input input-bordered flex-1" 
+                    />
+                  </div>
+                </div>
+                
+                {/* Border Width */}
+                <div className="form-control">
+                  <label className="label">
+                    <span className="label-text font-medium">Ketebalan Border</span>
+                  </label>
+                  <input 
+                    type="range" 
+                    min="1" 
+                    max="10" 
+                    value={subtitleOptions.borderWidth} 
+                    className="range range-primary w-full" 
+                    step="1" 
+                    onChange={(e) => handleSubtitleOptionChange('borderWidth', parseInt(e.target.value))}
+                  />
+                  <div className="w-full flex justify-between text-xs px-0 mt-1">
+                    <span>1</span>
+                    <span>3</span>
+                    <span>5</span>
+                    <span>7</span>
+                    <span>10</span>
+                  </div>
+                  <div className="text-center mt-1">
+                    <span className="text-sm badge">{subtitleOptions.borderWidth}px</span>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+        
+        <div className="flex justify-end mt-6 gap-2">
+          <button
+            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg text-gray-800 transition-colors"
+            onClick={() => setShowOptionsModal(false)}
+          >
+            Tutup
+          </button>
+          <button
+            className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg text-white hover:opacity-90 transition-opacity"
+            onClick={() => generatePowerPoint(selectedTab)}
+            disabled={generatingPpt || selectedVerses.length === 0}
+          >
+            {generatingPpt ? 'Membuat PowerPoint...' : 'Buat PowerPoint'}
+          </button>
+        </div>
+      </Modal>
+      
+      {/* Color Picker Overlay */}
+      {centralColorPicker.show && (
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]"
+          onClick={closeCentralColorPicker}
+        >
+          <div 
+            className="bg-white p-4 rounded-lg shadow-xl" 
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-lg font-semibold">Pilih Warna</h3>
+              <button
+                className="p-1 rounded-full hover:bg-gray-200"
+                onClick={closeCentralColorPicker}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <HexColorPicker
+              color={centralColorPicker.color}
+              onChange={centralColorPicker.onChange}
+            />
+            <div className="mt-2 flex items-center gap-2">
+              <div 
+                className="h-8 w-8 rounded-lg border border-gray-300"
+                style={{backgroundColor: centralColorPicker.color}}
+              ></div>
+              <input
+                type="text"
+                value={centralColorPicker.color}
+                onChange={(e) => centralColorPicker.onChange(e.target.value)}
+                className="input input-bordered flex-1"
+              />
+            </div>
+            <button 
+              className="btn btn-primary w-full mt-3"
+              onClick={closeCentralColorPicker}
+            >
+              Pilih Warna Ini
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {/* Tambahkan CSS untuk animasi kedip warna */}
+      <style jsx global>{`
+        @keyframes pulse-color {
+          0%, 100% {
+            background-color: #6366f1; /* indigo-500 */
+            box-shadow: 0 0 15px 5px rgba(99, 102, 241, 0.5);
+          }
+          50% {
+            background-color: #10b981; /* emerald-500 */
+            box-shadow: 0 0 15px 5px rgba(16, 185, 129, 0.5);
+          }
+        }
+        .animate-pulse-color {
+          animation: pulse-color 2s infinite;
+        }
+      `}</style>
     </div>
   );
 }

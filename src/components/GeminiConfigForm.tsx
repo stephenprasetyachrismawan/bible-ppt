@@ -1,10 +1,8 @@
 'use client'
 
 import React, { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { GEMINI_API_KEY } from '@/config/geminiConfig';
 
 interface GeminiConfigFormProps {
@@ -12,72 +10,51 @@ interface GeminiConfigFormProps {
   error?: string | null;
 }
 
+/**
+ * Komponen informasi tentang konfigurasi Gemini API
+ * Memanfaatkan API key dari environment variables
+ */
 const GeminiConfigForm: React.FC<GeminiConfigFormProps> = ({ onApiKeySet, error }) => {
-  const [apiKey, setApiKey] = useState<string>('');
+  const [apiKeyStatus, setApiKeyStatus] = useState<'available' | 'unavailable'>('unavailable');
   
   useEffect(() => {
-    // Initialize with any existing key from localStorage
-    const savedKey = localStorage.getItem('gemini_api_key');
-    if (savedKey) {
-      setApiKey(savedKey);
+    // Periksa apakah API key tersedia dari environment variables
+    if (GEMINI_API_KEY) {
+      setApiKeyStatus('available');
+      onApiKeySet(GEMINI_API_KEY);
+    } else {
+      setApiKeyStatus('unavailable');
     }
-  }, []);
-  
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (apiKey.trim()) {
-      // Save to localStorage
-      localStorage.setItem('gemini_api_key', apiKey.trim());
-      
-      // Notify parent component
-      onApiKeySet(apiKey.trim());
-    }
-  };
+  }, [onApiKeySet]);
   
   return (
     <Card className="mb-6">
       <CardHeader>
-        <CardTitle>Google Gemini API Configuration</CardTitle>
+        <CardTitle>Konfigurasi Google Gemini API</CardTitle>
         <CardDescription>
-          To use the image verse extraction feature, you need to provide your Google Gemini API key.
+          Status konfigurasi API key untuk fitur ekstraksi ayat dari gambar
         </CardDescription>
       </CardHeader>
       <CardContent>
         {error && (
-          <div className="bg-red-50 text-red-600 p-3 rounded-md mb-4 text-sm">
-            {error}
-          </div>
+          <Alert variant="destructive" className="mb-4">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
         
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="apiKey">Google Gemini API Key</Label>
-            <Input
-              id="apiKey"
-              type="text"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="Enter your Google Gemini API key"
-              className="font-mono"
-            />
-            <p className="text-xs text-gray-500">
-              You can get a Gemini API key from the{' '}
-              <a 
-                href="https://ai.google.dev/get-api-key" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-blue-600 hover:underline"
-              >
-                Google AI Studio
-              </a>
-            </p>
-          </div>
-          
-          <Button type="submit" disabled={!apiKey.trim()}>
-            Save API Key
-          </Button>
-        </form>
+        {apiKeyStatus === 'available' ? (
+          <Alert variant="success" className="bg-green-50 text-green-700 border-green-200">
+            <AlertDescription>
+              Gemini API key telah dikonfigurasi dan siap digunakan. API key diambil dari variabel lingkungan NEXT_PUBLIC_GEMINI_API_KEY di file .env.
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <Alert variant="warning" className="bg-amber-50 text-amber-700 border-amber-200">
+            <AlertDescription>
+              Gemini API key belum dikonfigurasi. Harap tambahkan NEXT_PUBLIC_GEMINI_API_KEY ke file .env Anda untuk mengaktifkan fitur ekstraksi ayat dari gambar.
+            </AlertDescription>
+          </Alert>
+        )}
       </CardContent>
     </Card>
   );
