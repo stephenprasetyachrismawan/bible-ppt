@@ -1,15 +1,16 @@
 'use client';
 
 import React from 'react';
-import { Plus, Settings, HelpCircle } from 'lucide-react';
+import { Plus, Settings, HelpCircle, Download } from 'lucide-react';
 
 interface FloatingButtonProps {
   onClick: () => void;
-  icon?: 'plus' | 'settings' | 'help' | React.ReactNode;
+  icon?: 'plus' | 'settings' | 'help' | 'download' | React.ReactNode;
   position?: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
   tooltip?: string;
   color?: 'primary' | 'secondary' | 'success' | 'warning' | 'danger';
   size?: 'sm' | 'md' | 'lg';
+  className?: string;
 }
 
 /**
@@ -22,6 +23,7 @@ const FloatingButton: React.FC<FloatingButtonProps> = ({
   tooltip,
   color = 'primary',
   size = 'md',
+  className = '',
 }) => {
   // Position classes
   const positionClasses = {
@@ -84,6 +86,8 @@ const FloatingButton: React.FC<FloatingButtonProps> = ({
         return <Settings size={iconSize} />;
       case 'help':
         return <HelpCircle size={iconSize} />;
+      case 'download':
+        return <Download size={iconSize} />;
       default:
         return <Plus size={iconSize} />;
     }
@@ -102,9 +106,9 @@ const FloatingButton: React.FC<FloatingButtonProps> = ({
       
       <button
         onClick={onClick}
-        className={`${sizeClasses[size]} rounded-full flex items-center justify-center text-white shadow-lg transition-all duration-300 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
+        className={`${sizeClasses[size]} rounded-full flex items-center justify-center text-white shadow-lg transition-all duration-300 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${className}`}
         style={{
-          background: colorStyles[color].background,
+          background: className && className.includes('animate-pulse-color') ? 'none' : colorStyles[color].background,
           boxShadow: colorStyles[color].shadow,
         }}
         aria-label={tooltip || 'Floating action button'}

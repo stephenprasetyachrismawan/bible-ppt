@@ -683,7 +683,7 @@ export default function Home() {
   };
   
   // Handle presentation option changes
-  const handlePptOptionChange = (option: string, value: string | number) => {
+  const handlePptOptionChange = (option: string, value: string | number | boolean) => {
     setPptOptions(prev => {
       let updatedValue = value;
       
@@ -706,7 +706,7 @@ export default function Home() {
   };
   
   // Handle subtitle option changes
-  const handleSubtitleOptionChange = (option: string, value: string | number) => {
+  const handleSubtitleOptionChange = (option: string, value: string | number | boolean) => {
     setSubtitleOptions(prev => ({
       ...prev,
       [option]: value
@@ -1854,16 +1854,16 @@ export default function Home() {
       <style jsx global>{`
         @keyframes pulse-color {
           0%, 100% {
-            background-color: #6366f1; /* indigo-500 */
-            box-shadow: 0 0 15px 5px rgba(99, 102, 241, 0.5);
+            background-color: #3b82f6; /* blue-500 */
+            box-shadow: 0 0 15px 5px rgba(59, 130, 246, 0.5);
           }
           50% {
-            background-color: #10b981; /* emerald-500 */
+            background-color: #10b981; /* green-500 */
             box-shadow: 0 0 15px 5px rgba(16, 185, 129, 0.5);
           }
         }
         .animate-pulse-color {
-          animation: pulse-color 2s infinite;
+          animation: pulse-color 1s infinite;
         }
       `}</style>
     </div>
