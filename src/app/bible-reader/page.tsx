@@ -1,8 +1,27 @@
 'use client'
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+
+// Helper: Konversi URL youtube menjadi embed dengan loop
+function getYoutubeEmbedUrl(url: string): string {
+  try {
+    const regExp = /^.*(?:youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|watch\?.+&v=)([^#&?]*).*/;
+    const match = url.match(regExp);
+    if (match && match[1].length === 11) {
+      const videoId = match[1];
+      return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&controls=0&showinfo=0&modestbranding=1&rel=0&loop=1&playlist=${videoId}`;
+    }
+    return '';
+  } catch {
+    return '';
+  }
+}
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { FullScreen, useFullScreenHandle } from 'react-full-screen';
+import ReactMarkdown from 'react-markdown';
+import parse from 'html-react-parser';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import getAllDocuments from '@/firebase/firestore/getAllData';
 import getSubCollection from '@/firebase/firestore/getSubCollection';
@@ -47,6 +66,81 @@ export default function BibleReader() {
   const [chapterContent, setChapterContent] = useState<Verse[]>([]);
   const [chapterInfo, setChapterInfo] = useState<{ book: string; chapter: number; totalVerses: number } | null>(null);
   
+  // State untuk mode full screen
+  const fullScreenHandle = useFullScreenHandle();
+  // isFullScreen state will be synced with fullScreenHandle.active via FullScreen component's onChange prop
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  const [currentVerseIndex, setCurrentVerseIndex] = useState(0);
+
+  // State untuk pengaturan tampilan
+  const [textSize, setTextSize] = useState(64); // Ukuran teks ayat default
+  const [fontFamily, setFontFamily] = useState('Arial, sans-serif');
+  const [isTextBold, setIsTextBold] = useState(false);
+  const [referenceTextSize, setReferenceTextSize] = useState(48); // Ukuran font referensi default
+  const [referenceFontFamily, setReferenceFontFamily] = useState('Arial, sans-serif');
+  const [isReferenceTextBold, setIsReferenceTextBold] = useState(false);
+  const [textColor, setTextColor] = useState('#FFFFFF');
+  const [referenceTextColor, setReferenceTextColor] = useState('#FFFFFF');
+  const [youtubeBgUrl, setYoutubeBgUrl] = useState('https://youtu.be/RgIxcrA7BfM?si=t5gk07e3fEyqP8TO');
+  const [showFullScreenSettings, setShowFullScreenSettings] = useState(false);
+  const fontOptions = [
+    { name: 'Arial', value: 'Arial, sans-serif' },
+    { name: 'Times New Roman', value: "'Times New Roman', serif" },
+    { name: 'Courier New', value: "'Courier New', monospace" },
+    { name: 'Georgia', value: 'Georgia, serif' },
+    { name: 'Verdana', value: 'Verdana, sans-serif' },
+    { name: 'Tahoma', value: 'Tahoma, sans-serif' },
+    { name: 'Trebuchet MS', value: "'Trebuchet MS', sans-serif" },
+    { name: 'Impact', value: 'Impact, Charcoal, sans-serif' },
+    { name: 'Comic Sans MS', value: "'Comic Sans MS', cursive" },
+    { name: 'Lucida Console', value: "'Lucida Console', Monaco, monospace" },
+    { name: 'Palatino Linotype', value: "'Palatino Linotype', 'Book Antiqua', Palatino, serif" },
+    { name: 'Garamond', value: 'Garamond, serif' },
+    { name: 'Bookman Old Style', value: "'Bookman Old Style', serif" },
+    { name: 'Arial Black', value: "'Arial Black', Gadget, sans-serif" },
+  ];
+  const [backgroundTemplate, setBackgroundTemplate] = useState('default');
+  const [backgroundOpacity, setBackgroundOpacity] = useState(0.3);
+
+
+  const [userUploadedBackgrounds, setUserUploadedBackgrounds] = useState<any[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Daftar template latar belakang VIDEO yang tersedia
+  // PENTING: Ganti videoUrl dan posterUrl dengan URL video Anda sendiri yang valid dan berlisensi.
+  // Video harus dioptimalkan untuk web (ukuran file kecil, format mp4/webm).
+  // Default background templates
+  const defaultBackgroundTemplates = useMemo(() => [
+    { id: 'default', name: 'Default (Gelap)', videoUrl: '', posterUrl: '' }, // No specific video for default
+    { id: 'nature_meadow', name: 'Padang Rumput', videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-countryside-meadow-4075-small.mp4', posterUrl: 'https://assets.mixkit.co/videos/preview/mixkit-countryside-meadow-4075-thumb.jpg' },
+    { id: 'ocean_waves', name: 'Ombak Laut', videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-waves-breaking-on-a-rocky-shore-2904-small.mp4', posterUrl: 'https://assets.mixkit.co/videos/preview/mixkit-waves-breaking-on-a-rocky-shore-2904-thumb.jpg' },
+    { id: 'sky_clouds', name: 'Awan Cepat', videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-fast-flying-through-white-clouds-34741-small.mp4', posterUrl: 'https://assets.mixkit.co/videos/preview/mixkit-fast-flying-through-white-clouds-34741-thumb.jpg' },
+    { id: 'jesus_cross_static', name: 'Salib Yesus (Statis)', videoUrl: 'https://cdn.pixabay.com/video/2020/04/04/35084-410166902_large.mp4', posterUrl: 'https://cdn.pixabay.com/vimeo/398885570/jesus-35084_1280x720.jpg' }, // Example from Pixabay, check license
+    { id: 'mountains_fog', name: 'Pegunungan Berkabut', videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-aerial-view-of-a-mountain-range-with-low-mist-4007-small.mp4', posterUrl: 'https://assets.mixkit.co/videos/preview/mixkit-aerial-view-of-a-mountain-range-with-low-mist-4007-thumb.jpg' },
+    { id: 'rice_field_sunset', name: 'Sawah Matahari Terbenam', videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-sunset-over-a-rice-field-4065-small.mp4', posterUrl: 'https://assets.mixkit.co/videos/preview/mixkit-sunset-over-a-rice-field-4065-thumb.jpg' },
+    { id: 'abstract_particles', name: 'Partikel Abstrak', videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-abstract-particles-background-4061-small.mp4', posterUrl: 'https://assets.mixkit.co/videos/preview/mixkit-abstract-particles-background-4061-thumb.jpg' },
+  ], []);
+
+  // Combine default and user-uploaded templates
+  const backgroundTemplates = useMemo(() => {
+    return [...defaultBackgroundTemplates, ...userUploadedBackgrounds];
+  }, [defaultBackgroundTemplates, userUploadedBackgrounds]);
+
+  // Effect to load user-uploaded backgrounds from localStorage on mount
+  useEffect(() => {
+    const storedUserUploads = localStorage.getItem('userUploadedBackgrounds');
+    if (storedUserUploads) {
+      try {
+        const parsedUploads = JSON.parse(storedUserUploads);
+        if (Array.isArray(parsedUploads)) {
+          setUserUploadedBackgrounds(parsedUploads);
+        }
+      } catch (e) {
+        console.error("Failed to parse userUploadedBackgrounds from localStorage", e);
+      }
+    }
+  }, []); // Empty dependency array to run only on mount
+
   /**
    * Mengambil data versi Alkitab saat komponen dimuat
    */
@@ -253,7 +347,7 @@ export default function BibleReader() {
       setChapterContent(verses);
     }
   }, [selectedVerse, verses, showFullChapter]);
-  
+
   /**
    * Handler untuk perubahan versi Alkitab
    */
@@ -299,6 +393,87 @@ export default function BibleReader() {
     }
   };
   
+  /**
+   * Handler untuk masuk ke mode full screen
+   */
+  const enterFullScreen = () => {
+    if (fullScreenHandle.active) return;
+    const promise = fullScreenHandle.enter();
+    if (promise && typeof promise.catch === 'function') {
+      promise.catch(err => {
+        console.error('Error entering full screen with react-full-screen:', err);
+        // If entering fails, onChange might not fire or fire with false.
+        // Explicitly set state to false to ensure UI consistency.
+        setIsFullScreen(false);
+      });
+    } else {
+      console.error('fullScreenHandle.enter() did not return a Promise. Ensure <FullScreen> component is rendered.');
+      setIsFullScreen(false); // Fallback
+    }
+    // setIsFullScreen(true) will be called by FullScreen's onChange when successful
+  };
+
+  const exitFullScreen = useCallback(() => {
+    if (!fullScreenHandle.active) return;
+    const promise = fullScreenHandle.exit();
+    if (promise && typeof promise.catch === 'function') {
+      promise.catch(err => {
+        console.error('Error exiting full screen with react-full-screen:', err);
+        // onChange should handle state update. If exit fails, user might still be in fullscreen.
+      });
+    } else {
+      console.error('fullScreenHandle.exit() did not return a Promise.');
+    }
+    // setIsFullScreen(false) will be called by FullScreen's onChange when successful
+  }, [fullScreenHandle]);
+
+  /**
+   * Handler untuk navigasi ke ayat berikutnya
+   */
+  const nextVerse = () => {
+    if (currentVerseIndex < chapterContent.length - 1) {
+      setCurrentVerseIndex(currentVerseIndex + 1);
+    }
+  };
+
+  /**
+   * Handler untuk navigasi ke ayat sebelumnya
+   */
+  const prevVerse = () => {
+    if (currentVerseIndex > 0) {
+      setCurrentVerseIndex(currentVerseIndex - 1);
+    }
+  };
+
+  /**
+   * Menggunakan full screen handle dari 'react-full-screen' untuk navigasi keyboard
+   */
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Use the local isFullScreen state, which is synced by FullScreen's onChange
+      if (!isFullScreen) return;
+
+      if (event.key === 'ArrowRight') {
+        nextVerse();
+      } else if (event.key === 'ArrowLeft') {
+        prevVerse();
+      } else if (event.key === 'Escape') {
+        exitFullScreen();
+      }
+    };
+
+    // Add/remove listener based on the local isFullScreen state
+    if (isFullScreen) {
+      document.addEventListener('keydown', handleKeyDown);
+    } else {
+      document.removeEventListener('keydown', handleKeyDown);
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isFullScreen, nextVerse, prevVerse, exitFullScreen]);
+
   /**
    * Navigasi ke pasal sebelumnya
    */
@@ -394,7 +569,250 @@ export default function BibleReader() {
       }
     }
   };
-  
+
+  /**
+   * Handler untuk mengubah ukuran teks
+   */
+  const changeTextSize = (size: number) => {
+    setTextSize(size);
+  };
+
+  /**
+   * Handler untuk mengubah jenis font
+   */
+  const changeFontFamily = (font: string) => {
+    setFontFamily(font);
+  };
+
+  /**
+   * Handler untuk mengubah template latar belakang
+   */
+  const changeBackgroundTemplate = (templateId: string) => {
+    setBackgroundTemplate(templateId);
+  };
+
+  /**
+   * Handler untuk mengubah opacity latar belakang
+   */
+  const changeBackgroundOpacity = (opacity: number) => {
+    setBackgroundOpacity(opacity);
+  };
+
+  /**
+   * Handler untuk mengubah warna teks
+   */
+  const changeTextColor = (color: string) => {
+    setTextColor(color);
+  };
+
+  /**
+   * Konten untuk tampilan full screen ayat
+   */
+  const renderFullScreenContent = () => {
+    if (chapterContent.length === 0) return null;
+
+    // Ayat saat ini
+    const currentVerse = chapterContent[currentVerseIndex];
+    // Dapatkan template latar belakang yang dipilih
+    const selectedBg = backgroundTemplates.find(t => t.id === backgroundTemplate) || backgroundTemplates[0];
+
+    return (
+      <div className="fixed inset-0 z-50 bg-black bg-opacity-90 flex flex-col justify-center items-center p-4">
+        {/* Latar belakang video (file atau YouTube) */}
+        <div className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat" style={{ opacity: backgroundOpacity / 100 }}>
+          {/* File video biasa */}
+          {selectedBg.videoUrl && !youtubeBgUrl && (
+            <video
+              key={selectedBg.id}
+              src={selectedBg.videoUrl}
+              poster={selectedBg.posterUrl}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="absolute inset-0 w-full h-full object-cover z-0"
+            />
+          )}
+          {/* YouTube background */}
+          {youtubeBgUrl && (
+            <iframe
+              key={youtubeBgUrl}
+              src={getYoutubeEmbedUrl(youtubeBgUrl)}
+              allow="autoplay; encrypted-media"
+              allowFullScreen
+              frameBorder="0"
+              className="absolute inset-0 w-full h-full object-cover z-0"
+              style={{ pointerEvents: 'none' }}
+              title="YouTube Background"
+            />
+          )}
+        </div>
+
+        {/* Panel Pengaturan Full Screen */}
+        {isFullScreen && (
+          <div className="fixed top-4 right-4 z-50 bg-black/80 rounded-lg p-4 shadow-lg max-w-xs flex flex-col gap-2">
+            <button
+              className="mb-2 text-white hover:text-primary font-bold text-sm self-end"
+              onClick={() => setShowFullScreenSettings(!showFullScreenSettings)}
+            >
+              {showFullScreenSettings ? 'Tutup Pengaturan' : '⚙️ Pengaturan'}
+            </button>
+            {showFullScreenSettings && (
+              <>
+                <label className="text-white text-xs">Ukuran Font Ayat
+                  <input type="range" min={0} max={100} value={textSize} onChange={e => setTextSize(Number(e.target.value))} className="w-full" />
+                  <span className="text-white ml-2 text-xs align-middle">{textSize}</span>
+                </label>
+                <label className="text-white text-xs flex items-center gap-2 mt-1 mb-2">
+                  <input type="checkbox" checked={isTextBold} onChange={e => setIsTextBold(e.target.checked)} />
+                  <span>Tebal (Bold) Ayat</span>
+                </label>
+                <label className="text-white text-xs">Jenis Font Ayat
+                  <select value={fontFamily} onChange={e => setFontFamily(e.target.value)} className="w-full rounded p-1 mt-1 mb-2" style={{color: 'black'}}>
+                    {fontOptions.map(opt => <option key={opt.value} value={opt.value} style={{color: 'black', background: 'white'}}>{opt.name}</option>)}
+                  </select>
+                </label>
+                <label className="text-white text-xs">Warna Teks Ayat
+                  <input type="color" value={textColor} onChange={e => setTextColor(e.target.value)} className="w-12 h-6 ml-2 align-middle" />
+                </label>
+                <hr className="my-2 border-gray-400" />
+                <label className="text-white text-xs">Ukuran Font Referensi
+                  <input type="range" min={0} max={100} value={referenceTextSize} onChange={e => setReferenceTextSize(Number(e.target.value))} className="w-full" />
+                  <span className="text-white ml-2 text-xs align-middle">{referenceTextSize}</span>
+                </label>
+                <label className="text-white text-xs flex items-center gap-2 mt-1 mb-2">
+                  <input type="checkbox" checked={isReferenceTextBold} onChange={e => setIsReferenceTextBold(e.target.checked)} />
+                  <span>Tebal (Bold) Referensi</span>
+                </label>
+                <label className="text-white text-xs">Jenis Font Referensi
+                  <select value={referenceFontFamily} onChange={e => setReferenceFontFamily(e.target.value)} className="w-full rounded p-1 mt-1 mb-2" style={{color: 'black'}}>
+                    {fontOptions.map(opt => <option key={opt.value} value={opt.value} style={{color: 'black', background: 'white'}}>{opt.name}</option>)}
+                  </select>
+                </label>
+                <label className="text-white text-xs">Warna Referensi
+                  <input type="color" value={referenceTextColor} onChange={e => setReferenceTextColor(e.target.value)} className="w-12 h-6 ml-2 align-middle" />
+                </label>
+                <hr className="my-2 border-gray-400" />
+                <label className="text-white text-xs">Transparansi Background
+                  <input type="range" min={0} max={100} value={backgroundOpacity} onChange={e => setBackgroundOpacity(Number(e.target.value))} className="w-full" />
+                  <span className="text-white ml-2 text-xs align-middle">{backgroundOpacity}</span>
+                </label>
+                <hr className="my-2 border-gray-400" />
+                <label className="text-white text-xs">Background Video YouTube (URL)
+                  <input type="text" value={youtubeBgUrl} onChange={e => setYoutubeBgUrl(e.target.value)} placeholder="https://youtube.com/..." className="w-full rounded p-1 mt-1 mb-2" />
+                </label>
+                <span className="text-gray-300 text-xs">Kosongkan untuk menggunakan background template biasa.</span>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Kontainer untuk rasio 16:9 */}
+        <div className="relative z-10 w-full h-full flex justify-center items-center p-4">
+          {/* Kontainer dengan rasio aspek 16:9, padding atas untuk referensi */}
+          <div className="aspect-[16/9] w-full max-w-[95vw] max-h-[95vh] bg-black/60 rounded-lg shadow-2xl flex flex-col justify-start items-center p-6 md:p-10 overflow-hidden pt-[20px]">
+            {/* Informasi Kitab, Pasal, Ayat (Referensi) */}
+            {chapterInfo && currentVerse && (
+              <div style={{
+                fontFamily: referenceFontFamily,
+                fontSize: `${referenceTextSize}px`,
+                color: referenceTextColor,
+                fontWeight: isReferenceTextBold ? 'bold' : 'normal',
+                textAlign: 'center',
+                width: '90%',
+                margin: '0 auto',
+                marginBottom: '15px',
+                lineHeight: '1.3'
+              }}>
+                {chapterInfo.book} {chapterInfo.chapter}:{currentVerse.number}
+              </div>
+            )}
+            {/* Konten Ayat Utama */}
+            <div className="w-full flex-grow overflow-y-auto flex flex-col justify-center items-center custom-scrollbar">
+              <div
+                className="prose-invert max-w-none leading-relaxed text-center"
+                style={{ fontSize: `${textSize}px`, fontFamily, color: textColor, fontWeight: isTextBold ? 'bold' : 'normal' }}
+              >
+                {currentVerse.text ? parse(currentVerse.text.replace(/<\/?p>/g, '')) : ''}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Tombol navigasi */}
+        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex gap-4 z-10">
+          <Button 
+            onClick={prevVerse} 
+            disabled={currentVerseIndex === 0}
+            className="bg-white/20 hover:bg-white/30 text-white rounded-full w-12 h-12"
+          >
+            ←
+          </Button>
+          <Button 
+            onClick={nextVerse} 
+            disabled={currentVerseIndex === chapterContent.length - 1}
+            className="bg-white/20 hover:bg-white/30 text-white rounded-full w-12 h-12"
+          >
+            →
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
+  const handleVideoFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setLoading(true);
+    setError('');
+
+    const formData = new FormData();
+    formData.append('video', file);
+
+    try {
+      const response = await fetch('/api/upload-video', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Gagal mengunggah video.');
+      }
+
+      const newVideoTemplate = {
+        id: `custom-${Date.now()}`,
+        name: result.fileName || file.name, // Use filename from server if provided
+        videoUrl: result.filePath, // Path relative to public folder
+        posterUrl: '', // No poster for user uploads initially
+      };
+
+      setUserUploadedBackgrounds(prev => {
+        const updated = [...prev, newVideoTemplate];
+        localStorage.setItem('userUploadedBackgrounds', JSON.stringify(updated));
+        return updated;
+      });
+      
+      // Optionally, select the newly uploaded background
+      // setBackgroundTemplate(newVideoTemplate.id);
+
+      alert('Video berhasil diunggah dan ditambahkan ke daftar template!');
+
+    } catch (err: any) {
+      console.error('Error uploading video:', err);
+      setError(`Gagal mengunggah video: ${err.message}`);
+      alert(`Gagal mengunggah video: ${err.message}`);
+    } finally {
+      setLoading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   return (
     <div className="container mx-auto py-6 space-y-8">
       <h1 className="text-3xl font-bold text-center text-primary mb-8">Lihat Alkitab</h1>
@@ -465,7 +883,7 @@ export default function BibleReader() {
                 disabled={loading || chapters.length === 0}
               >
                 <option value="" disabled>
-                  {chapters.length > 0 ? 'Pilih Pasal' : 'Pilih kitab terlebih dahulu'}
+                  {chapters.length > 0 ? 'Pilih Pasal' : 'Tidak ada pasal tersedia'}
                 </option>
                 {chapters.map((chapter) => (
                   <option key={chapter.id} value={chapter.id}>
@@ -474,22 +892,21 @@ export default function BibleReader() {
                 ))}
               </select>
             </div>
-            
-            {/* Tampilan Ayat */}
+
+            {/* Toggle Tampilkan Seluruh Pasal */}
             <div className="form-control">
-              <label className="label cursor-pointer justify-start gap-2">
-                <input
-                  type="checkbox"
-                  className="checkbox checkbox-primary"
-                  checked={showFullChapter}
-                  onChange={handleShowFullChapterChange}
-                  disabled={!selectedChapter}
+              <label className="label cursor-pointer">
+                <span className="label-text font-medium">Tampilkan Seluruh Pasal</span> 
+                <input 
+                  type="checkbox" 
+                  className="toggle toggle-primary"
+                  checked={showFullChapter} 
+                  onChange={(e) => setShowFullChapter(e.target.checked)} 
                 />
-                <span className="label-text font-medium">Tampilkan Seluruh Pasal</span>
               </label>
             </div>
-            
-            {/* Ayat - hanya tampilkan jika tidak menampilkan seluruh pasal */}
+
+            {/* Ayat (hanya jika tidak menampilkan seluruh pasal) */}
             {!showFullChapter && (
               <div className="form-control">
                 <label className="label">
@@ -502,95 +919,65 @@ export default function BibleReader() {
                   disabled={loading || verses.length === 0}
                 >
                   <option value="" disabled>
-                    {verses.length > 0 ? 'Pilih Ayat' : 'Pilih pasal terlebih dahulu'}
+                    {verses.length > 0 ? 'Pilih Ayat' : 'Tidak ada ayat tersedia'}
                   </option>
-                  {verses
-                    .filter(verse => verse.type !== 'title')
-                    .map((verse) => (
-                      <option key={verse.id} value={verse.id}>
-                        {verse.number}
-                      </option>
-                    ))}
+                  {verses.map((verse) => (
+                    <option key={verse.id} value={verse.id}>
+                      {verse.number}
+                    </option>
+                  ))}
                 </select>
               </div>
             )}
           </CardContent>
         </Card>
-        
-        {/* Panel Konten Alkitab */}
-        <Card className="md:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle>
-              {chapterInfo ? (
-                <span>
-                  {chapterInfo.book} {chapterInfo.chapter}
-                  {!showFullChapter && selectedVerse && 
-                    `:${verses.find(v => v.id === selectedVerse)?.number}`
-                  }
-                </span>
-              ) : (
-                <span>Konten Alkitab</span>
-              )}
-            </CardTitle>
-            
-            {chapterInfo && (
-              <div className="flex items-center gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={goToPreviousChapter}
-                  disabled={loading}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="m15 18-6-6 6-6"></path></svg>
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={goToNextChapter}
-                  disabled={loading}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="m9 18 6-6-6-6"></path></svg>
-                </Button>
-              </div>
-            )}
-          </CardHeader>
-          
-          <CardContent>
-            {loading ? (
-              <div className="flex items-center justify-center h-64">
-                <div className="loading loading-spinner loading-lg text-primary"></div>
-              </div>
-            ) : chapterContent.length > 0 ? (
-              <div className="space-y-3 prose max-w-none">
-                {chapterContent.map((verse) => (
-                  <div 
-                    key={verse.id} 
-                    className={`${
-                      verse.type === 'title' 
-                        ? 'font-bold text-primary text-xl mb-4' 
-                        : ''
-                    }`}
-                  >
-                    {verse.type !== 'title' && (
-                      <sup className="font-bold text-sm text-primary mr-1">
-                        {verse.number}
-                      </sup>
-                    )}
-                    <span 
-                      dangerouslySetInnerHTML={{ __html: verse.text || '' }}
-                    />
+
+        {/* Panel Tampilan */}
+        <div className="md:col-span-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Pratinjau</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="flex justify-center items-center h-64">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                </div>
+              ) : chapterContent.length > 0 ? (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-2xl font-bold">
+                      {chapterInfo?.book} {chapterInfo?.chapter}
+                      {!showFullChapter && `:${selectedVerse}`}
+                    </h2>
+                    <Button onClick={enterFullScreen} disabled={loading}>
+                      Tampilkan Layar Penuh
+                    </Button>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-16 text-gray-500">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-12 h-12 mx-auto mb-4 text-gray-400"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
-                <p>Pilih sebuah versi, kitab, dan pasal untuk mulai membaca</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  
+                  <div className="prose max-w-none">
+                    {chapterContent.map((verse) => (
+                      <p key={verse.id} className="mb-4">
+                        <span className="font-bold">{verse.number} </span>
+                        {verse.text ? parse(verse.text.replace(/<\/?p>/g, '')) : ''}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <p>Pilih kitab, pasal, dan ayat untuk melihat isi Alkitab</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
+
+      {/* Full Screen Modal */}
+      <FullScreen handle={fullScreenHandle} onChange={setIsFullScreen}>
+        {isFullScreen && renderFullScreenContent()}
+      </FullScreen>
     </div>
   );
-} 
+}
