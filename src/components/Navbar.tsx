@@ -75,7 +75,7 @@ const Navbar: React.FC = () => {
           </div>
           
           {/* Right section - notifications, search, profile */}
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 ml-auto">
             {/* Search toggle */}
             <button 
               onClick={() => setIsSearchOpen(!isSearchOpen)}

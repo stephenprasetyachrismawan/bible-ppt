@@ -28,6 +28,160 @@ export interface ExtractedVerse {
 }
 
 /**
+ * Interface for Bible verse search results from Gemini
+ */
+export interface BibleVerseSearchResult {
+  book: string;     // Book name (e.g., "Matius", "Mat")
+  chapter: number;  // Chapter number
+  verseStart?: number; // Starting verse (if a range)
+  verseEnd?: number;   // Ending verse (if a range)
+}
+
+/**
+ * Search for Bible verses using Gemini API
+ * @param searchQuery The search query (e.g., "Matius 3:1-3" or "Mat 3")
+ * @param apiKey Google API key for Gemini
+ * @returns A promise that resolves to search results
+ */
+export const searchBibleVerseWithGemini = async (
+  searchQuery: string,
+  apiKey: string
+): Promise<BibleVerseSearchResult[]> => {
+  if (!apiKey) {
+    throw new Error('Gemini API key is required');
+  }
+
+  if (!searchQuery) {
+    throw new Error('Search query is required');
+  }
+
+  try {
+    // Create Gemini API request
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
+    
+    // Prompt to extract verse references from the search query
+    const prompt = `Anda adalah Asisten pencarian ayat Alkitab yang akurat. Pengguna mencari referensi ayat Alkitab. Analisis kueri berikut: "${searchQuery}"
+    
+    Hasilkan respons dalam format JSON array berikut (tanpa komentar atau text tambahan):
+    [
+      {
+        "book": "nama kitab lengkap",
+        "chapter": nomor pasal (angka),
+        "verseStart": nomor ayat awal (angka, opsional),
+        "verseEnd": nomor ayat akhir (angka, opsional)
+      }
+    ]
+
+    Aturan:
+    1. Jika pengguna hanya menyebutkan kitab dan pasal (mis. "Mat 3"), verseStart dan verseEnd boleh kosong.
+    2. Jika pengguna menyebutkan satu ayat (mis. "Mat 3:1"), verseStart dan verseEnd harus sama.
+    3. Jika pengguna menyebutkan rentang ayat (mis. "Mat 3:1-3"), verseStart dan verseEnd harus sesuai.
+    4. Jika ada singkatan kitab, ubah menjadi nama kitab lengkap (mis. "Mat" → "Matius").
+    5. Selalu periksa format penulisan referensi Alkitab yang umum (mis. "Kitab Pasal:Ayat" atau "Kitab Pasal:Ayat-Ayat").
+    6. Jika ada ketidakjelasan dalam kueri, kembalikan interpretasi terbaik berdasarkan konvensi referensi Alkitab.
+    7. Hanya hasilkan JSON array. Tidak ada teks penjelasan apapun.`;
+    
+    const payload = {
+      contents: [
+        {
+          parts: [
+            {
+              text: prompt
+            }
+          ]
+        }
+      ],
+      generationConfig: {
+        temperature: 0.1,
+        topK: 32,
+        topP: 0.95,
+        maxOutputTokens: 1024
+      }
+    };
+
+    // Send request to Gemini API
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Gemini API error: ${response.status} ${errorText}`);
+    }
+
+    const data = await response.json();
+    
+    // Parse the response text
+    let responseText = '';
+    
+    if (data.candidates && data.candidates.length > 0 && 
+        data.candidates[0].content && 
+        data.candidates[0].content.parts && 
+        data.candidates[0].content.parts.length > 0) {
+      responseText = data.candidates[0].content.parts[0].text;
+    } else {
+      throw new Error('Invalid Gemini API response format');
+    }
+    
+    // Parse the response to extract Bible verse references
+    return parseBibleVerseSearchResponse(responseText);
+  } catch (error) {
+    console.error('Error in searchBibleVerseWithGemini:', error);
+    throw error;
+  }
+};
+
+/**
+ * Parse Gemini API response text to extract Bible verse references
+ * @param responseText The text response from Gemini API
+ * @returns An array of Bible verse search results
+ */
+export const parseBibleVerseSearchResponse = (responseText: string): BibleVerseSearchResult[] => {
+  try {
+    // Try to extract JSON array from response
+    const jsonMatch = responseText.match(/\[\s*{[\s\S]*}\s*\]/);
+    
+    if (jsonMatch) {
+      try {
+        // Parse JSON array
+        const parsedArray = JSON.parse(jsonMatch[0]);
+        
+        // Validate and map to our expected format
+        return parsedArray.map((item: any) => {
+          const result: BibleVerseSearchResult = {
+            book: item.book || '',
+            chapter: parseInt(item.chapter) || 0
+          };
+          
+          if (item.verseStart) {
+            result.verseStart = parseInt(item.verseStart) || undefined;
+          }
+          
+          if (item.verseEnd) {
+            result.verseEnd = parseInt(item.verseEnd) || undefined;
+          }
+          
+          return result;
+        });
+      } catch (e) {
+        console.warn('Failed to parse JSON from response:', e);
+        return [];
+      }
+    }
+    
+    // If JSON parsing fails, return empty array
+    return [];
+  } catch (error) {
+    console.error('Error parsing Gemini Bible verse search response:', error);
+    return [];
+  }
+};
+
+/**
  * Extract verses from an image using Gemini Vision API
  * @param imageFile The image file containing Bible verses
  * @param apiKey Google API key for Gemini
