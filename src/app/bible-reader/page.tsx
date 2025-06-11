@@ -94,9 +94,9 @@ export default function BibleReader() {
 
   // State untuk pencarian
   const [searchQuery, setSearchQuery] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchError, setSearchError] = useState('');
   const [searchResults, setSearchResults] = useState<GeminiSearchResult[]>([]);
+  const [searchError, setSearchError] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [showApiKeyForm, setShowApiKeyForm] = useState(false);
 
@@ -111,10 +111,10 @@ export default function BibleReader() {
   const [currentVerseIndex, setCurrentVerseIndex] = useState(0);
 
   // State untuk pengaturan tampilan
-  const [textSize, setTextSize] = useState(50);
+  const [textSize, setTextSize] = useState(75);
   const [fontFamily, setFontFamily] = useState('Arial');
   const [isTextBold, setIsTextBold] = useState(false);
-  const [referenceTextSize, setReferenceTextSize] = useState(40);
+  const [referenceTextSize, setReferenceTextSize] = useState(67);
   const [referenceFontFamily, setReferenceFontFamily] = useState('Arial');
   const [isReferenceTextBold, setIsReferenceTextBold] = useState(true);
   const [textColor, setTextColor] = useState('#ffffff');
@@ -180,13 +180,28 @@ export default function BibleReader() {
   }, []); // Empty dependency array to run only on mount
 
   /**
-   * Load API key from localStorage on mount
+   * Load API key from environment variable or localStorage on mount
    */
   useEffect(() => {
+    // Periksa apakah ada API key di environment variable
+    const envApiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+    
+    if (envApiKey) {
+      console.log('Using Gemini API key from environment variable');
+      setApiKey(envApiKey);
+      setShowApiKeyForm(false);
+      return;
+    }
+    
+    // Jika tidak ada di env, coba ambil dari localStorage
     const savedApiKey = localStorage.getItem('geminiApiKey');
     if (savedApiKey) {
+      console.log('Using Gemini API key from localStorage');
       setApiKey(savedApiKey);
+      setShowApiKeyForm(false);
     } else {
+      // Jika tidak ditemukan di mana pun, tampilkan form
+      console.log('No Gemini API key found, showing input form');
       setShowApiKeyForm(true);
     }
   }, []);
@@ -950,7 +965,7 @@ export default function BibleReader() {
             {showFullScreenSettings && (
               <>
                 <label className="text-white text-xs">Ukuran Font Ayat
-                  <input type="range" min={0} max={100} value={textSize} onChange={e => setTextSize(Number(e.target.value))} className="w-full" />
+                  <input type="range" min={0} max={120} value={textSize} onChange={e => setTextSize(Number(e.target.value))} className="w-full" />
                   <span className="text-white ml-2 text-xs align-middle">{textSize}</span>
                 </label>
                 <label className="text-white text-xs flex items-center gap-2 mt-1 mb-2">
@@ -967,7 +982,7 @@ export default function BibleReader() {
                 </label>
                 <hr className="my-2 border-gray-400" />
                 <label className="text-white text-xs">Ukuran Font Referensi
-                  <input type="range" min={0} max={100} value={referenceTextSize} onChange={e => setReferenceTextSize(Number(e.target.value))} className="w-full" />
+                  <input type="range" min={0} max={120} value={referenceTextSize} onChange={e => setReferenceTextSize(Number(e.target.value))} className="w-full" />
                   <span className="text-white ml-2 text-xs align-middle">{referenceTextSize}</span>
                 </label>
                 <label className="text-white text-xs flex items-center gap-2 mt-1 mb-2">
@@ -1115,9 +1130,15 @@ export default function BibleReader() {
     }
     
     if (!apiKey) {
-      setShowApiKeyForm(true);
-      setSearchError('Kunci API Gemini diperlukan untuk pencarian');
-      return;
+      // Coba dapatkan API key dari environment variable sebagai fallback
+      const envApiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+      if (envApiKey) {
+        setApiKey(envApiKey);
+      } else {
+        setShowApiKeyForm(true);
+        setSearchError('Kunci API Gemini diperlukan untuk pencarian');
+        return;
+      }
     }
     
     if (!selectedVersion) {
